@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { getStroke } from "perfect-freehand";
 import {
   useCanvasStore,
@@ -616,11 +616,21 @@ export default function Canvas() {
       const measuredSize = measureText(content, isLatex, 24);
 
       if (editor.editingId) {
+        const existing = elements.find((el) => el.id === editor.editingId);
+        const existingText =
+          existing && existing.type === "text"
+            ? (existing as import("@/store/canvasStore").TextElement)
+            : null;
+
         updateElement(editor.editingId, {
           content,
           isLatex,
-          width: measuredSize.width,
+          width:
+            existingText?.userResized && existingText.width > 0
+              ? existingText.width
+              : measuredSize.width,
           height: measuredSize.height,
+          userResized: existingText?.userResized ?? false,
         });
       } else {
         addElement({
@@ -636,6 +646,7 @@ export default function Canvas() {
           opacity: 1,
           width: measuredSize.width,
           height: measuredSize.height,
+          userResized: false,
         });
       }
 
@@ -643,7 +654,7 @@ export default function Canvas() {
       setTextEditor(null);
       textEditorRef.current = null;
     },
-    [addElement, updateElement, pushToHistory, strokeColor]
+    [addElement, updateElement, pushToHistory, strokeColor, elements]
   );
 
   const handleTextCancel = useCallback(() => {
@@ -725,6 +736,49 @@ export default function Canvas() {
     ? "text"
     : "crosshair";
 
+  const contentBounds = useMemo(() => getContentBounds(elements), [elements]);
+
+  const shouldShowBackToContent = useMemo(() => {
+    if (!contentBounds || !svgRef.current) return false;
+    const rect = svgRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+
+    const viewLeft = -camera.x / camera.zoom;
+    const viewTop = -camera.y / camera.zoom;
+    const viewRight = (rect.width - camera.x) / camera.zoom;
+    const viewBottom = (rect.height - camera.y) / camera.zoom;
+
+    const margin = 120;
+    const contentOutOfView =
+      contentBounds.x + contentBounds.w < viewLeft + margin ||
+      contentBounds.x > viewRight - margin ||
+      contentBounds.y + contentBounds.h < viewTop + margin ||
+      contentBounds.y > viewBottom - margin;
+
+    return contentOutOfView;
+  }, [contentBounds, camera]);
+
+  const handleBackToContent = useCallback(() => {
+    if (!contentBounds || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const pad = 80;
+    const scaleX = rect.width / Math.max(contentBounds.w + pad * 2, 1);
+    const scaleY = rect.height / Math.max(contentBounds.h + pad * 2, 1);
+    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2.5);
+
+    const cx = contentBounds.x + contentBounds.w / 2;
+    const cy = contentBounds.y + contentBounds.h / 2;
+
+    setCamera({
+      zoom: nextZoom,
+      x: rect.width / 2 - cx * nextZoom,
+      y: rect.height / 2 - cy * nextZoom,
+    });
+    setSelectedElementId(null);
+  }, [contentBounds, setCamera, setSelectedElementId]);
+
   return (
     <div className="w-full h-full relative overflow-hidden bg-transparent">
       {/* Grid background */}
@@ -737,27 +791,12 @@ export default function Canvas() {
         onPointerUp={handlePointerUp}
       >
         <defs>
-          <pattern
-            id="grid"
-            width={20 * camera.zoom}
-            height={20 * camera.zoom}
-            patternUnits="userSpaceOnUse"
-            x={camera.x % (20 * camera.zoom)}
-            y={camera.y % (20 * camera.zoom)}
-          >
-            <circle
-              cx={1}
-              cy={1}
-              r={1}
-              fill="var(--border-oat)"
-            />
-          </pattern>
           <filter id="selection-glow">
             <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="var(--color-slushie-500)" floodOpacity="0.6" />
           </filter>
         </defs>
 
-        <rect width="100%" height="100%" fill="url(#grid)" />
+        <rect width="100%" height="100%" fill="transparent" />
 
         <g transform={`translate(${camera.x},${camera.y}) scale(${camera.zoom})`}>
           {elements.map((el) => {
@@ -854,6 +893,23 @@ export default function Canvas() {
           camera={camera}
         />
       )}
+
+      {shouldShowBackToContent && (
+        <button
+          type="button"
+          onClick={handleBackToContent}
+          className="fixed left-1/2 -translate-x-1/2 top-4 sm:top-auto sm:bottom-6 z-50 group flex items-center gap-2 rounded-[999px] border border-[var(--border-oat)] bg-white/90 backdrop-blur-md px-4 py-2.5 text-sm font-medium text-[var(--color-warm-charcoal)] tracking-wide shadow-[rgba(0,0,0,0.1)_0px_1px_1px,rgba(0,0,0,0.04)_0px_-1px_1px_inset,rgba(0,0,0,0.05)_0px_-0.5px_1px] hover:bg-[var(--color-slushie-500)] hover:text-white hover:-translate-y-0.5 hover:shadow-[-7px_7px_0px_0px_#000] active:translate-y-0 active:shadow-none transition-all duration-200"
+        >
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-[var(--border-oat)] bg-[var(--background)] group-hover:border-white/60 group-hover:bg-white/15">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </span>
+          <span className="uppercase text-[10px] font-semibold tracking-[0.6px] whitespace-nowrap">
+            Back to content
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -895,4 +951,27 @@ function getElementBounds(el: CanvasElement): { x: number; y: number; w: number;
     case "pen":
       return { x: el.x, y: el.y, w: 0, h: 0 };
   }
+}
+
+function getContentBounds(elements: CanvasElement[]): { x: number; y: number; w: number; h: number } | null {
+  if (!elements.length) return null;
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const el of elements) {
+    const b = getElementBounds(el);
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w);
+    maxY = Math.max(maxY, b.y + b.h);
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
+
+  return { x: minX, y: minY, w: Math.max(maxX - minX, 1), h: Math.max(maxY - minY, 1) };
 }
