@@ -9,7 +9,7 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   name: "Scrawl",
-  url: "https://scrawl.app",
+  url: "https://scrawl-lovat.vercel.app",
   description:
     "Draw, sketch, and write math on a freeform whiteboard. Type LaTeX like \\frac{a}{b} or x^2 and see it rendered instantly.",
   applicationCategory: "EducationalApplication",

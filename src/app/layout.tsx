@@ -39,11 +39,11 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Scrawl" }],
   creator: "Scrawl",
-  metadataBase: new URL("https://scrawl.app"),
+  metadataBase: new URL("https://scrawl-lovat.vercel.app"),
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://scrawl.app",
+    url: "https://scrawl-lovat.vercel.app",
     siteName: "Scrawl",
     title: "Scrawl — Freeform Whiteboard with LaTeX Math Rendering",
     description:
