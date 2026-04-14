@@ -147,26 +147,15 @@ export default function LatexCheatsheet() {
       <button
         onClick={() => setOpen(true)}
         title="LaTeX cheatsheet"
+        className="fixed top-4 right-4 sm:top-auto sm:bottom-4 sm:right-4 z-50 w-9 h-9 flex items-center justify-center text-base font-bold transition-all duration-200"
         style={{
-          position: "fixed",
-          bottom: 16,
-          right: 16,
-          zIndex: 50,
-          width: 36,
-          height: 36,
           borderRadius: 1584,
           background: "#ffffff",
           border: "1px solid var(--border-oat)",
           boxShadow:
             "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px",
           cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 16,
-          fontWeight: 700,
           color: "var(--color-warm-charcoal)",
-          transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "rotateZ(-8deg) translateY(-20%)";

@@ -48,7 +48,7 @@ export default function Home() {
             <p>Please enable JavaScript to use the freeform whiteboard with LaTeX math rendering.</p>
           </div>
         </noscript>
-        <footer className="fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
+        <footer className="hidden sm:block fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
           <span className="font-semibold text-[var(--color-warm-charcoal)]">Scrawl</span>
           {" · "}
           Type LaTeX in text mode · Pinch to zoom · Two-finger scroll to pan

@@ -67,7 +67,7 @@ export default function Toolbar() {
   return (
     <>
       {/* Main toolbar */}
-      <nav aria-label="Drawing tools" className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card px-2 py-1.5">
+      <nav aria-label="Drawing tools" className="fixed bottom-6 sm:bottom-auto sm:top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card px-2 py-1.5 max-w-[calc(100%-2rem)] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {TOOLS.map((tool) => {
           const isActive = activeTool === tool.type;
           return (
@@ -78,7 +78,7 @@ export default function Toolbar() {
               aria-pressed={isActive}
               onClick={() => setActiveTool(tool.type)}
               className={`
-                relative flex items-center justify-center w-11 h-11
+                relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0
                 ${isActive ? "clay-btn-active" : "clay-btn text-[#55534e]"}
               `}
             >
@@ -92,13 +92,13 @@ export default function Toolbar() {
           );
         })}
 
-        <div className="w-px h-8 bg-[#dad4c8] mx-1.5" />
+        <div className="w-px h-8 bg-[#dad4c8] mx-1.5 shrink-0" />
 
         <button
           title="Undo (Ctrl+Z)"
           aria-label="Undo"
           onClick={undo}
-          className="flex items-center justify-center w-11 h-11 clay-btn text-[#55534e]"
+          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0 clay-btn text-[#55534e]"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="1 4 1 10 7 10" />
@@ -109,7 +109,7 @@ export default function Toolbar() {
           title="Redo (Ctrl+Shift+Z)"
           aria-label="Redo"
           onClick={redo}
-          className="flex items-center justify-center w-11 h-11 clay-btn text-[#55534e]"
+          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0 clay-btn text-[#55534e]"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="23 4 23 10 17 10" />
@@ -119,7 +119,7 @@ export default function Toolbar() {
       </nav>
 
       {/* Color picker */}
-      <div role="group" aria-label="Color picker" className="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 clay-card px-3 py-2">
+      <div role="group" aria-label="Color picker" className="fixed bottom-24 sm:bottom-auto sm:top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 clay-card px-3 py-2 max-w-[calc(100%-2rem)] overflow-x-auto justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {COLORS.map((color) => (
           <button
             key={color}
@@ -127,7 +127,7 @@ export default function Toolbar() {
             aria-label={`Color ${color}`}
             aria-pressed={strokeColor === color}
             onClick={() => setStrokeColor(color)}
-            className="relative w-7 h-7 rounded-full transition-transform duration-150 hover:scale-110"
+            className="relative w-6 h-6 sm:w-7 sm:h-7 shrink-0 rounded-full transition-transform duration-150 hover:scale-110"
             style={{ 
               backgroundColor: color,
               boxShadow: "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px"

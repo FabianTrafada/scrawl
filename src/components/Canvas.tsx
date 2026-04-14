@@ -13,6 +13,7 @@ import ShapeElement from "@/elements/ShapeElement";
 import TextElementRenderer from "@/elements/TextElement";
 import ImageElementRenderer from "@/elements/ImageElement";
 import TextEditor from "./TextEditor";
+import ResizeHandles, { type HandleType } from "./ResizeHandles";
 
 interface DrawingState {
   type: "pen" | "rectangle" | "ellipse" | "line" | "arrow";
@@ -38,6 +39,19 @@ interface DragState {
   elementStartY: number;
   elementStartX2?: number;
   elementStartY2?: number;
+}
+
+interface ResizingState {
+  elementId: string;
+  handle: HandleType;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+  origW: number;
+  origH: number;
+  origX2?: number;
+  origY2?: number;
 }
 
 function getSvgPathFromStroke(stroke: number[][]): string {
@@ -81,6 +95,7 @@ export default function Canvas() {
   const textEditorRef = useRef<TextEditorState | null>(null);
   const textCommitGuard = useRef(false);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [resizing, setResizing] = useState<ResizingState | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -322,6 +337,57 @@ export default function Canvas() {
         return;
       }
 
+      if (resizing) {
+        const pt = getCanvasPoint(e);
+        const { handle, origX, origY, origW, origH, origX2, origY2 } = resizing;
+        const MIN = 20;
+
+        if (handle === "start" || handle === "end") {
+          if (handle === "start") {
+            updateElement(resizing.elementId, { x: pt.x, y: pt.y });
+          } else {
+            updateElement(resizing.elementId, { x2: pt.x, y2: pt.y } as Record<string, number>);
+          }
+        } else {
+          let newX = origX;
+          let newY = origY;
+          let newW = origW;
+          let newH = origH;
+
+          switch (handle) {
+            case "se":
+              newW = Math.max(MIN, pt.x - origX);
+              newH = Math.max(MIN, pt.y - origY);
+              break;
+            case "sw":
+              newW = Math.max(MIN, origX + origW - pt.x);
+              newH = Math.max(MIN, pt.y - origY);
+              newX = origX + origW - newW;
+              break;
+            case "ne":
+              newW = Math.max(MIN, pt.x - origX);
+              newH = Math.max(MIN, origY + origH - pt.y);
+              newY = origY + origH - newH;
+              break;
+            case "nw":
+              newW = Math.max(MIN, origX + origW - pt.x);
+              newH = Math.max(MIN, origY + origH - pt.y);
+              newX = origX + origW - newW;
+              newY = origY + origH - newH;
+              break;
+          }
+
+          const updates: Record<string, number> = { x: newX, y: newY, width: newW, height: newH };
+          // For ellipse, also update x2/y2 if they existed (they don't, but keep safe)
+          if (origX2 !== undefined && origY2 !== undefined) {
+            updates.x2 = newX + newW;
+            updates.y2 = newY + newH;
+          }
+          updateElement(resizing.elementId, updates);
+        }
+        return;
+      }
+
       if (dragging) {
         const pt = getCanvasPoint(e);
         const dx = pt.x - dragging.startX;
@@ -360,13 +426,19 @@ export default function Canvas() {
         });
       }
     },
-    [isPanning, panStart, dragging, drawing, camera, getCanvasPoint, setCamera, updateElement, elements]
+    [isPanning, panStart, resizing, dragging, drawing, camera, getCanvasPoint, setCamera, updateElement, elements]
   );
 
   const handlePointerUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
       setPanStart(null);
+      return;
+    }
+
+    if (resizing) {
+      pushToHistory();
+      setResizing(null);
       return;
     }
 
@@ -443,7 +515,7 @@ export default function Canvas() {
     }
 
     setDrawing(null);
-  }, [drawing, dragging, isPanning, addElement, pushToHistory, strokeColor, fillColor, strokeWidth]);
+  }, [drawing, dragging, resizing, isPanning, addElement, pushToHistory, strokeColor, fillColor, strokeWidth]);
 
   const handleElementSelect = useCallback(
     (id: string) => {
@@ -506,6 +578,31 @@ export default function Canvas() {
       textCommitGuard.current = false;
     },
     [elements]
+  );
+
+  const handleResizeStart = useCallback(
+    (handle: HandleType, e: React.PointerEvent) => {
+      e.stopPropagation();
+      const el = selectedElementId ? elements.find((el) => el.id === selectedElementId) : null;
+      if (!el) return;
+
+      const pt = getCanvasPoint(e);
+      const bounds = getElementBounds(el);
+
+      setResizing({
+        elementId: el.id,
+        handle,
+        startX: pt.x,
+        startY: pt.y,
+        origX: bounds.x,
+        origY: bounds.y,
+        origW: bounds.w,
+        origH: bounds.h,
+        origX2: (el as { x2?: number }).x2,
+        origY2: (el as { y2?: number }).y2,
+      });
+    },
+    [selectedElementId, elements, getCanvasPoint]
   );
 
   const handleTextCommit = useCallback(
@@ -627,7 +724,7 @@ export default function Canvas() {
       <svg
         ref={svgRef}
         className="w-full h-full absolute inset-0"
-        style={{ cursor: cursorStyle }}
+        style={{ cursor: cursorStyle, touchAction: "none" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -704,6 +801,37 @@ export default function Canvas() {
           })}
 
           {renderDrawingPreview()}
+
+          {/* Resize handles for selected element */}
+          {selectedElementId && (() => {
+            const sel = elements.find((e) => e.id === selectedElementId);
+            if (!sel || sel.type === "pen") return null;
+
+            if (sel.type === "line" || sel.type === "arrow") {
+              return (
+                <ResizeHandles
+                  mode="line"
+                  x1={sel.x}
+                  y1={sel.y}
+                  x2={sel.x2}
+                  y2={sel.y2}
+                  onResizeStart={handleResizeStart}
+                />
+              );
+            }
+
+            const bounds = getElementBounds(sel);
+            return (
+              <ResizeHandles
+                mode="box"
+                x={bounds.x}
+                y={bounds.y}
+                w={bounds.w}
+                h={bounds.h}
+                onResizeStart={handleResizeStart}
+              />
+            );
+          })()}
         </g>
       </svg>
 
@@ -737,4 +865,26 @@ function measureText(
     width: Math.max(content.length * fontSize * 0.6, 40),
     height: fontSize * 1.4,
   };
+}
+
+function getElementBounds(el: CanvasElement): { x: number; y: number; w: number; h: number } {
+  switch (el.type) {
+    case "rectangle":
+    case "ellipse":
+      return { x: el.x, y: el.y, w: el.width, h: el.height };
+    case "text":
+      return { x: el.x, y: el.y, w: el.width || 60, h: el.height || 30 };
+    case "image":
+      return { x: el.x, y: el.y, w: el.width, h: el.height };
+    case "line":
+    case "arrow": {
+      const minX = Math.min(el.x, el.x2);
+      const minY = Math.min(el.y, el.y2);
+      const maxX = Math.max(el.x, el.x2);
+      const maxY = Math.max(el.y, el.y2);
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+    case "pen":
+      return { x: el.x, y: el.y, w: 0, h: 0 };
+  }
 }
