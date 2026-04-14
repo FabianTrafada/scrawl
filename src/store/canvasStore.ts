@@ -67,6 +67,7 @@ export interface TextElement extends BaseElement {
   isLatex: boolean;
   width: number;
   height: number;
+  userResized?: boolean;
 }
 
 export interface ImageElement extends BaseElement {

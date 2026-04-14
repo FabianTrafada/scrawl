@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import type { TextElement as TextElementType } from "@/store/canvasStore";
 import { renderLatexToDisplayHTML } from "@/lib/latex";
 
@@ -9,7 +9,7 @@ interface Props {
   isSelected: boolean;
   onSelect: (id: string) => void;
   onDoubleClick: (id: string) => void;
-  onResize?: (id: string, height: number) => void;
+  onResize?: (id: string, width: number, height: number) => void;
 }
 
 export default function TextElementRenderer({
@@ -20,34 +20,31 @@ export default function TextElementRenderer({
   onResize,
 }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const elWidth = element.width || 60;
-  const [measuredH, setMeasuredH] = useState(element.height || 30);
+  const [measured, setMeasured] = useState({ w: element.width || 60, h: element.height || 30 });
 
   const latexHtml = useMemo(() => {
     if (!element.isLatex) return "";
     return renderLatexToDisplayHTML(element.content);
   }, [element.content, element.isLatex]);
 
-  const measure = useCallback(() => {
+  useEffect(() => {
     if (!contentRef.current) return;
     requestAnimationFrame(() => {
       const el = contentRef.current;
       if (!el) return;
+      const w = el.scrollWidth;
       const h = el.scrollHeight;
-      if (h > 0 && h !== measuredH) {
-        setMeasuredH(h);
-        onResize?.(element.id, h);
+      if (w > 0 && h > 0) {
+        setMeasured({ w, h });
+
+        if (element.userResized) {
+          onResize?.(element.id, element.width, h);
+        } else {
+          onResize?.(element.id, w + 8, h);
+        }
       }
     });
-  }, [element.id, measuredH, onResize]);
-
-  useEffect(() => {
-    measure();
-  }, [latexHtml, element.content, element.fontSize, elWidth, measure]);
-
-  useEffect(() => {
-    setMeasuredH(element.height || 30);
-  }, [element.height]);
+  }, [latexHtml, element.content, element.fontSize, element.width, element.id, element.userResized, onResize]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -60,7 +57,10 @@ export default function TextElementRenderer({
   };
 
   const pad = 8;
-  const displayH = Math.max(measuredH, 30);
+  const displayW = element.userResized
+    ? Math.max(element.width, 40)
+    : Math.max(measured.w, 40);
+  const displayH = Math.max(measured.h, 30);
 
   return (
     <g>
@@ -68,7 +68,7 @@ export default function TextElementRenderer({
         <rect
           x={element.x - pad}
           y={element.y - pad}
-          width={elWidth + pad * 2}
+          width={displayW + pad * 2}
           height={displayH + pad * 2}
           fill="transparent"
           stroke="#3bd3fd"
@@ -82,7 +82,7 @@ export default function TextElementRenderer({
       <foreignObject
         x={element.x}
         y={element.y}
-        width={Math.max(elWidth, 60)}
+        width={Math.max(displayW + 4, 60)}
         height={Math.max(displayH + 4, 30)}
         style={{ overflow: "visible" }}
       >
@@ -99,8 +99,9 @@ export default function TextElementRenderer({
             lineHeight: 1.4,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            width: Math.max(elWidth - 8, 40),
+            maxWidth: element.userResized ? displayW : undefined,
             fontFamily: element.isLatex ? undefined : "var(--font-hand)",
+            display: "inline-block",
           }}
           dangerouslySetInnerHTML={
             element.isLatex ? { __html: latexHtml } : undefined

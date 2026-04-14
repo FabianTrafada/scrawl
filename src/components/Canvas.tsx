@@ -377,13 +377,13 @@ export default function Canvas() {
               break;
           }
 
-          const updates: Record<string, number> = { x: newX, y: newY, width: newW, height: newH };
+          const updates: Record<string, unknown> = { x: newX, y: newY, width: newW, height: newH, userResized: true };
           if (origX2 !== undefined && origY2 !== undefined) {
-            updates.x2 = newX + newW;
-            updates.y2 = newY + newH;
+            (updates as Record<string, number>).x2 = newX + newW;
+            (updates as Record<string, number>).y2 = newY + newH;
           }
 
-          updateElement(resizing.elementId, updates);
+          updateElement(resizing.elementId, updates as Partial<CanvasElement>);
         }
         return;
       }
@@ -653,8 +653,8 @@ export default function Canvas() {
   }, []);
 
   const handleTextResize = useCallback(
-    (id: string, height: number) => {
-      updateElement(id, { height });
+    (id: string, width: number, height: number) => {
+      updateElement(id, { width, height });
     },
     [updateElement]
   );
