@@ -1,26 +1,104 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf9f7; /* Warm Cream */
+  --foreground: #000000; /* Clay Black */
+  
+  /* Swatches */
+  --color-matcha-600: #078a52;
+  --color-slushie-500: #3bd3fd;
+  --color-lemon-500: #fbbd41;
+  --color-ube-800: #43089f;
+  --color-pomegranate-400: #fc7981;
+  --color-blueberry-800: #01418d;
+
+  /* Neutrals */
+  --color-warm-silver: #9f9b93;
+  --color-warm-charcoal: #55534e;
+  
+  /* Borders */
+  --border-oat: #dad4c8;
+  --border-oat-light: #eee9df;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-matcha: var(--color-matcha-600);
+  --color-slushie: var(--color-slushie-500);
+  --color-lemon: var(--color-lemon-500);
+  --color-ube: var(--color-ube-800);
+  --color-pomegranate: var(--color-pomegranate-400);
+  --color-blueberry: var(--color-blueberry-800);
+  --color-oat: var(--border-oat);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
+html,
 body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss03", "ss10", "ss11", "ss12";
+}
+
+h1, h2, h3, h4, h5, h6, .display-text {
+  font-feature-settings: "ss01", "ss03", "ss10", "ss11", "ss12";
+}
+
+svg {
+  display: block;
+}
+
+/* Clay Design System Classes */
+.clay-card {
+  background: #ffffff;
+  border: 1px solid var(--border-oat);
+  border-radius: 24px;
+  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+}
+
+.clay-btn {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: transparent;
+  color: #000000;
+  border-radius: 12px;
+}
+
+.clay-btn:hover {
+  transform: rotateZ(-8deg) translateY(-20%);
+  box-shadow: -7px 7px 0px 0px #000000;
+  background: var(--color-matcha-600);
+  color: #ffffff;
+}
+
+.clay-btn-active {
+  background: var(--color-blueberry-800);
+  color: #ffffff;
+  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+}
+
+.clay-btn-active:hover {
+  background: var(--color-blueberry-800);
+  transform: none;
+  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+}
+
+.clay-input {
+  border: 1px solid #717989;
+  border-radius: 4px;
+  color: #000000;
+}
+
+.clay-input:focus {
+  outline: 2px solid rgb(20, 110, 245);
 }

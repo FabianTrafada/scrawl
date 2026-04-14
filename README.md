@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scrawl
+
+A freeform drawing app inspired by Excalidraw with **automatic LaTeX rendering**. Type math expressions like `x^2`, `\frac{a}{b}`, or `\sqrt{x}` in text mode and they render as beautifully typeset math on the canvas.
+
+## Tech Stack
+
+- **Next.js 16** (App Router, TypeScript, Tailwind CSS)
+- **perfect-freehand** — pressure-sensitive freehand pen strokes
+- **rough.js** — hand-drawn sketchy style for shapes
+- **KaTeX** — fast LaTeX math rendering
+- **zustand** — lightweight state management
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tools & Shortcuts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Tool      | Shortcut | Description                              |
+| --------- | -------- | ---------------------------------------- |
+| Select    | `V`      | Click to select, drag to move elements   |
+| Pen       | `P`      | Freehand drawing with pressure           |
+| Rectangle | `R`      | Draw hand-drawn style rectangles         |
+| Ellipse   | `O`      | Draw hand-drawn style ellipses           |
+| Line      | `L`      | Draw straight lines                      |
+| Arrow     | `A`      | Draw arrows                              |
+| Text      | `T`      | Add text — auto-detects LaTeX            |
 
-## Learn More
+### Other Shortcuts
 
-To learn more about Next.js, take a look at the following resources:
+- **Ctrl+Z** / **Cmd+Z** — Undo
+- **Ctrl+Shift+Z** / **Cmd+Shift+Z** — Redo
+- **Delete** / **Backspace** — Delete selected element
+- **Space + Drag** or **Two-finger scroll** — Pan the canvas
+- **Pinch** or **Ctrl + Scroll wheel** — Zoom in/out
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## LaTeX Detection
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+When using the Text tool, the following patterns are automatically detected and rendered as math:
 
-## Deploy on Vercel
+- Superscripts: `x^2`, `a^{n+1}`
+- Subscripts: `x_1`, `a_{ij}`
+- Commands: `\frac{a}{b}`, `\sqrt{x}`, `\sum`, `\int`, `\alpha`
+- Dollar delimiters: `$E = mc^2$`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+A live preview appears below the text input as you type, so you can see the rendered math before committing.
