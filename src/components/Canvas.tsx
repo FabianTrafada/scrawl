@@ -378,11 +378,11 @@ export default function Canvas() {
           }
 
           const updates: Record<string, number> = { x: newX, y: newY, width: newW, height: newH };
-          // For ellipse, also update x2/y2 if they existed (they don't, but keep safe)
           if (origX2 !== undefined && origY2 !== undefined) {
             updates.x2 = newX + newW;
             updates.y2 = newY + newH;
           }
+
           updateElement(resizing.elementId, updates);
         }
         return;
@@ -652,6 +652,13 @@ export default function Canvas() {
     textCommitGuard.current = false;
   }, []);
 
+  const handleTextResize = useCallback(
+    (id: string, height: number) => {
+      updateElement(id, { height });
+    },
+    [updateElement]
+  );
+
   // Preview drawing shape
   const renderDrawingPreview = () => {
     if (!drawing) return null;
@@ -784,6 +791,7 @@ export default function Canvas() {
                     isSelected={el.id === selectedElementId}
                     onSelect={handleElementSelect}
                     onDoubleClick={handleTextDoubleClick}
+                    onResize={handleTextResize}
                   />
                 );
               case "image":

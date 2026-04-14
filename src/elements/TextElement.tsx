@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import type { TextElement as TextElementType } from "@/store/canvasStore";
 import { renderLatexToDisplayHTML } from "@/lib/latex";
 
@@ -9,6 +9,7 @@ interface Props {
   isSelected: boolean;
   onSelect: (id: string) => void;
   onDoubleClick: (id: string) => void;
+  onResize?: (id: string, height: number) => void;
 }
 
 export default function TextElementRenderer({
@@ -16,27 +17,37 @@ export default function TextElementRenderer({
   isSelected,
   onSelect,
   onDoubleClick,
+  onResize,
 }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: element.width || 60, h: element.height || 30 });
+  const elWidth = element.width || 60;
+  const [measuredH, setMeasuredH] = useState(element.height || 30);
 
   const latexHtml = useMemo(() => {
     if (!element.isLatex) return "";
     return renderLatexToDisplayHTML(element.content);
   }, [element.content, element.isLatex]);
 
-  useEffect(() => {
+  const measure = useCallback(() => {
     if (!contentRef.current) return;
     requestAnimationFrame(() => {
       const el = contentRef.current;
       if (!el) return;
-      const w = el.scrollWidth;
       const h = el.scrollHeight;
-      if (w > 0 && h > 0) {
-        setSize({ w, h });
+      if (h > 0 && h !== measuredH) {
+        setMeasuredH(h);
+        onResize?.(element.id, h);
       }
     });
-  }, [latexHtml, element.content, element.fontSize]);
+  }, [element.id, measuredH, onResize]);
+
+  useEffect(() => {
+    measure();
+  }, [latexHtml, element.content, element.fontSize, elWidth, measure]);
+
+  useEffect(() => {
+    setMeasuredH(element.height || 30);
+  }, [element.height]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -49,16 +60,16 @@ export default function TextElementRenderer({
   };
 
   const pad = 8;
+  const displayH = Math.max(measuredH, 30);
 
   return (
     <g>
-      {/* Dashed selection box */}
       {isSelected && (
         <rect
           x={element.x - pad}
           y={element.y - pad}
-          width={size.w + pad * 2}
-          height={size.h + pad * 2}
+          width={elWidth + pad * 2}
+          height={displayH + pad * 2}
           fill="transparent"
           stroke="#3bd3fd"
           strokeWidth={2}
@@ -71,8 +82,8 @@ export default function TextElementRenderer({
       <foreignObject
         x={element.x}
         y={element.y}
-        width={Math.max(size.w + 4, 60)}
-        height={Math.max(size.h + 4, 30)}
+        width={Math.max(elWidth, 60)}
+        height={Math.max(displayH + 4, 30)}
         style={{ overflow: "visible" }}
       >
         <div
@@ -87,9 +98,9 @@ export default function TextElementRenderer({
             padding: 4,
             lineHeight: 1.4,
             whiteSpace: "pre-wrap",
-            wordBreak: "keep-all",
+            wordBreak: "break-word",
+            width: Math.max(elWidth - 8, 40),
             fontFamily: element.isLatex ? undefined : "var(--font-hand)",
-            display: "inline-block",
           }}
           dangerouslySetInnerHTML={
             element.isLatex ? { __html: latexHtml } : undefined
