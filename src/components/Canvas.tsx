@@ -7,6 +7,15 @@ import {
   type CanvasElement,
 } from "@/store/canvasStore";
 import { screenToCanvas, type Point } from "@/lib/utils";
+import {
+  dataUrlToBlob,
+  deleteImageBlob,
+  getImageBlob,
+  loadScene,
+  saveImageBlob,
+  saveScene,
+  type PersistedSceneV1,
+} from "@/lib/storage";
 
 import PenElement from "@/elements/PenElement";
 import ShapeElement from "@/elements/ShapeElement";
@@ -87,6 +96,7 @@ export default function Canvas() {
   const pushToHistory = useCanvasStore((s) => s.pushToHistory);
   const setCamera = useCanvasStore((s) => s.setCamera);
   const setActiveTool = useCanvasStore((s) => s.setActiveTool);
+  const hydrateScene = useCanvasStore((s) => s.hydrateScene);
   const undo = useCanvasStore((s) => s.undo);
   const redo = useCanvasStore((s) => s.redo);
 
@@ -99,6 +109,106 @@ export default function Canvas() {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+  const isHydratingRef = useRef(false);
+
+  // Hydrate scene + image blobs on first mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const persisted = loadScene();
+      if (!persisted) return;
+
+      isHydratingRef.current = true;
+      const restoredElements = await Promise.all(
+        persisted.elements.map(async (el) => {
+          if (el.type !== "image") return el;
+          const imageEl = el as import("@/store/canvasStore").ImageElement;
+
+          // Legacy base64 scene still works
+          if (!imageEl.imageId && imageEl.src) return imageEl;
+          if (!imageEl.imageId) return imageEl;
+
+          const blob = await getImageBlob(imageEl.imageId);
+          if (!blob) return imageEl;
+
+          const objectUrl = URL.createObjectURL(blob);
+          objectUrlsRef.current.add(objectUrl);
+          return { ...imageEl, src: objectUrl };
+        })
+      );
+
+      if (cancelled) return;
+      hydrateScene({
+        elements: restoredElements as CanvasElement[],
+        camera: persisted.camera,
+      });
+      // allow one tick so autosave won't race before hydration settles
+      setTimeout(() => {
+        isHydratingRef.current = false;
+      }, 0);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+      for (const url of objectUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      objectUrlsRef.current.clear();
+    };
+  }, [hydrateScene]);
+
+  // Debounced autosave with legacy image migration
+  useEffect(() => {
+    if (isHydratingRef.current) return;
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        const nextElements: CanvasElement[] = [];
+
+        for (const el of elements) {
+          if (el.type !== "image") {
+            nextElements.push(el);
+            continue;
+          }
+
+          const imageEl = el as import("@/store/canvasStore").ImageElement;
+          let imageId = imageEl.imageId;
+
+          // Migrate legacy dataURL image to IndexedDB once
+          if (!imageId && imageEl.src?.startsWith("data:")) {
+            try {
+              const blob = dataUrlToBlob(imageEl.src);
+              imageId = await saveImageBlob(blob);
+              updateElement(imageEl.id, { imageId });
+            } catch (err) {
+              console.warn("Failed to migrate legacy image", err);
+            }
+          }
+
+          // Persist lightweight scene element (do not persist runtime object URL)
+          nextElements.push({
+            ...imageEl,
+            src: imageEl.src?.startsWith("data:") ? imageEl.src : undefined,
+            imageId,
+          });
+        }
+
+        const payload: PersistedSceneV1 = {
+          version: 1,
+          savedAt: Date.now(),
+          elements: nextElements,
+          camera,
+        };
+        saveScene(payload);
+      })();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [elements, camera, updateElement]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -123,6 +233,17 @@ export default function Canvas() {
           case "delete":
           case "backspace":
             if (selectedElementId) {
+              const selected = elements.find((el) => el.id === selectedElementId);
+              if (selected?.type === "image") {
+                const selectedImage = selected as import("@/store/canvasStore").ImageElement;
+                if (selectedImage.imageId) {
+                  void deleteImageBlob(selectedImage.imageId);
+                }
+                if (selectedImage.src?.startsWith("blob:")) {
+                  URL.revokeObjectURL(selectedImage.src);
+                  objectUrlsRef.current.delete(selectedImage.src);
+                }
+              }
               pushToHistory();
               deleteElement(selectedElementId);
             }
@@ -152,13 +273,12 @@ export default function Canvas() {
           const file = item.getAsFile();
           if (!file) continue;
 
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const dataUrl = ev.target?.result as string;
-            if (!dataUrl) return;
+          const objectUrl = URL.createObjectURL(file);
+          objectUrlsRef.current.add(objectUrl);
 
-            const img = new Image();
-            img.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            void (async () => {
               const maxDim = 500;
               let w = img.width;
               let h = img.height;
@@ -166,6 +286,13 @@ export default function Canvas() {
                 const scale = maxDim / Math.max(w, h);
                 w = Math.round(w * scale);
                 h = Math.round(h * scale);
+              }
+
+              let imageId: string | undefined;
+              try {
+                imageId = await saveImageBlob(file);
+              } catch (err) {
+                console.warn("Failed to persist pasted image blob", err);
               }
 
               const center = screenToCanvas(
@@ -180,17 +307,21 @@ export default function Canvas() {
                 y: center.y - h / 2,
                 width: w,
                 height: h,
-                src: dataUrl,
+                imageId,
+                src: objectUrl,
                 strokeColor: "transparent",
                 fillColor: "transparent",
                 strokeWidth: 0,
                 opacity: 1,
               });
               pushToHistory();
-            };
-            img.src = dataUrl;
+            })();
           };
-          reader.readAsDataURL(file);
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            objectUrlsRef.current.delete(objectUrl);
+          };
+          img.src = objectUrl;
           break;
         }
       }
@@ -204,7 +335,7 @@ export default function Canvas() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("paste", handlePaste);
     };
-  }, [textEditor, selectedElementId, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement]);
+  }, [textEditor, selectedElementId, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements]);
 
   // Zoom and Pan with scroll/trackpad
   useEffect(() => {

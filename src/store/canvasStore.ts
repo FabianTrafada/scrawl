@@ -72,7 +72,8 @@ export interface TextElement extends BaseElement {
 
 export interface ImageElement extends BaseElement {
   type: "image";
-  src: string; // data URL
+  src?: string; // runtime object URL or legacy data URL
+  imageId?: string; // persisted binary reference in IndexedDB
   width: number;
   height: number;
 }
@@ -108,6 +109,7 @@ interface CanvasState {
   setCamera: (camera: Partial<Camera>) => void;
   setStrokeColor: (color: string) => void;
   setFillColor: (color: string) => void;
+  hydrateScene: (payload: { elements: CanvasElement[]; camera?: Partial<Camera> }) => void;
 
   addElement: (element: Omit<CanvasElement, "id"> | Record<string, unknown>) => string;
   updateElement: (id: string, updates: Partial<CanvasElement>) => void;
@@ -134,6 +136,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((s) => ({ camera: { ...s.camera, ...partial } })),
   setStrokeColor: (color) => set({ strokeColor: color }),
   setFillColor: (color) => set({ fillColor: color }),
+  hydrateScene: ({ elements, camera }) =>
+    set((s) => ({
+      elements,
+      camera: camera ? { ...s.camera, ...camera } : s.camera,
+      selectedElementId: null,
+      history: [structuredClone(elements)],
+      historyIndex: 0,
+    })),
 
   addElement: (element) => {
     const id = generateId();
