@@ -57,7 +57,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   const validPendingInvites = room.invites.filter(
-    (inv) => !memberEmails.has(inv.email.toLowerCase())
+    (inv: { email: string }) => !memberEmails.has(inv.email.toLowerCase())
   );
 
   return NextResponse.json({
