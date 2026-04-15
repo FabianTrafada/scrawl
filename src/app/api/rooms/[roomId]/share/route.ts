@@ -48,9 +48,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // Filter out any pending invites for users who are already members or the owner
   const memberEmails = new Set(
     room.members
-      .map((m) => m.user.email)
-      .filter(Boolean)
-      .map((email) => email!.toLowerCase())
+      .map((m: { user: { email: string | null } }) => m.user.email)
+      .filter((email): email is string => Boolean(email))
+      .map((email) => email.toLowerCase())
   );
   if (room.owner.email) {
     memberEmails.add(room.owner.email.toLowerCase());

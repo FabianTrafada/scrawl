@@ -63,7 +63,7 @@ export default function UserMenu() {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarSrc}
-            alt={user.name ?? "User"}
+            alt={user?.name ?? "User"}
             className="w-full h-full rounded-full object-cover"
           />
         ) : initials ? (
