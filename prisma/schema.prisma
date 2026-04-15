@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  isAnonymous   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  rooms       Room[]         @relation("RoomOwner")
+  memberships RoomMember[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Room {
+  id            String   @id @default(cuid())
+  name          String   @default("Untitled")
+  ownerId       String
+  defaultAccess String   @default("edit")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  owner   User         @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members RoomMember[]
+  invites RoomInvite[]
+
+  @@index([ownerId])
+}
+
+model RoomMember {
+  id     String @id @default(cuid())
+  roomId String
+  userId String
+  access String @default("edit")
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([userId])
+}
+
+model RoomInvite {
+  id        String   @id @default(cuid())
+  roomId    String
+  email     String
+  access    String   @default("edit")
+  token     String   @unique @default(cuid())
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([email])
+}

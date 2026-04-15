@@ -1,6 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useCanvasStore, type ToolType } from "@/store/canvasStore";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import PresenceAvatars from "./PresenceAvatars";
+import ShareDialog from "./ShareDialog";
+import UserMenu from "./UserMenu";
 
 const TOOLS: { type: ToolType; label: string; shortcut: string; svg: string }[] = [
   {
@@ -8,6 +14,12 @@ const TOOLS: { type: ToolType; label: string; shortcut: string; svg: string }[] 
     label: "Select",
     shortcut: "V",
     svg: `<path d="M5 3l12 9-5 1 3 7-3 1-3-7-4 4z" fill="currentColor"/>`,
+  },
+  {
+    type: "pan",
+    label: "Pan",
+    shortcut: "H",
+    svg: `<path d="M14.5 10c0-1.1-.9-2-2-2s-2 .9-2 2M10.5 9c0-1.1-.9-2-2-2s-2 .9-2 2M6.5 11c0-1.1-.9-2-2-2s-2 .9-2 2v5.5c0 3 2.5 5.5 5.5 5.5h4c3 0 5.5-2.5 5.5-5.5V12c0-1.1-.9-2-2-2s-2 .9-2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.5 10V5c0-1.1.9-2 2-2s2 .9 2 2v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
   },
   {
     type: "pen",
@@ -63,11 +75,70 @@ export default function Toolbar() {
   const redo = useCanvasStore((s) => s.redo);
   const strokeColor = useCanvasStore((s) => s.strokeColor);
   const setStrokeColor = useCanvasStore((s) => s.setStrokeColor);
+  const isReadOnly = useCanvasStore((s) => s.isReadOnly);
+
+  const pathname = usePathname();
+  const roomMatch = pathname.match(/^\/room\/(.+)$/);
+  const roomId = roomMatch?.[1] ?? null;
+  const isInRoom = !!roomId;
+
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <>
-      {/* Main toolbar */}
-      <nav aria-label="Drawing tools" className="fixed bottom-6 sm:bottom-auto sm:top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card px-2 py-1.5 max-w-[calc(100%-2rem)] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* Top-left: Back to Home (Leave Room) */}
+      {isInRoom && (
+        <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-50">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 sm:gap-2 p-2 sm:px-4 sm:py-2.5 rounded-full clay-card text-[15px] font-[500] text-[var(--color-warm-charcoal)] cursor-pointer hover:bg-[var(--border-oat-light)] active:scale-95 transition-all duration-200"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            <span className="hidden sm:inline">Home</span>
+          </Link>
+        </div>
+      )}
+
+      {/* Top-right: presence avatars + share + user menu */}
+      {isInRoom && (
+        <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-50 flex items-center gap-2 sm:gap-3">
+          <PresenceAvatars />
+
+          {/* Share button */}
+          {!isReadOnly && (
+            <button
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-2 p-2 sm:px-4 sm:py-2.5 rounded-full clay-card text-sm font-medium text-[var(--color-warm-charcoal)] cursor-pointer hover:bg-[var(--color-slushie-500)] hover:text-white hover:-translate-y-1 hover:shadow-[-4px_4px_0px_0px_#000] active:translate-y-0 active:shadow-none transition-all duration-200"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="sm:w-4 sm:h-4">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          )}
+
+          <UserMenu />
+        </div>
+      )}
+
+      {/* Read-only banner */}
+      {isReadOnly && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full clay-card text-xs font-medium text-[var(--color-warm-silver)] uppercase tracking-wider select-none">
+          View only
+        </div>
+      )}
+
+      {/* Main toolbar — dimmed if read-only */}
+      <nav
+        aria-label="Drawing tools"
+        className={`fixed bottom-4 sm:bottom-auto sm:top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card clay-toolbar px-2 py-1.5 w-[calc(100%-2rem)] sm:w-auto max-w-full overflow-x-auto no-scrollbar ${
+          isReadOnly ? "opacity-40 pointer-events-none" : ""
+        }`}
+      >
         {TOOLS.map((tool) => {
           const isActive = activeTool === tool.type;
           return (
@@ -77,28 +148,31 @@ export default function Toolbar() {
               aria-label={`${tool.label} tool`}
               aria-pressed={isActive}
               onClick={() => setActiveTool(tool.type)}
+              disabled={isReadOnly}
               className={`
-                relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0
-                ${isActive ? "clay-btn-active" : "clay-btn text-[#55534e]"}
+                relative flex items-center justify-center w-11 h-11 shrink-0 clay-btn
+                ${isActive ? "clay-btn-active" : "text-[#55534e]"}
               `}
             >
               <svg
                 width="20"
                 height="20"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
                 dangerouslySetInnerHTML={{ __html: tool.svg }}
               />
             </button>
           );
         })}
 
-        <div className="w-px h-8 bg-[#dad4c8] mx-1.5 shrink-0" />
+        <div className="w-px h-8 bg-[#dad4c8] mx-1.5 shrink-0" aria-hidden="true" />
 
         <button
           title="Undo (Ctrl+Z)"
           aria-label="Undo"
           onClick={undo}
-          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0 clay-btn text-[#55534e]"
+          disabled={isReadOnly}
+          className="flex items-center justify-center w-11 h-11 shrink-0 clay-btn text-[#55534e]"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="1 4 1 10 7 10" />
@@ -109,36 +183,56 @@ export default function Toolbar() {
           title="Redo (Ctrl+Shift+Z)"
           aria-label="Redo"
           onClick={redo}
-          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 shrink-0 clay-btn text-[#55534e]"
+          disabled={isReadOnly}
+          className="flex items-center justify-center w-11 h-11 shrink-0 clay-btn text-[#55534e]"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="23 4 23 10 17 10" />
             <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10" />
           </svg>
         </button>
       </nav>
 
-      {/* Color picker */}
-      <div role="group" aria-label="Color picker" className="fixed bottom-24 sm:bottom-auto sm:top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 clay-card px-3 py-2 max-w-[calc(100%-2rem)] overflow-x-auto justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* Color picker — dimmed if read-only */}
+      <div
+        role="group"
+        aria-label="Color picker"
+        className={`fixed bottom-24 sm:bottom-auto sm:top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card px-2 py-2 justify-center ${
+          isReadOnly ? "opacity-40 pointer-events-none" : ""
+        }`}
+      >
         {COLORS.map((color) => (
           <button
             key={color}
-            title={color}
             aria-label={`Color ${color}`}
             aria-pressed={strokeColor === color}
             onClick={() => setStrokeColor(color)}
-            className="relative w-6 h-6 sm:w-7 sm:h-7 shrink-0 rounded-full transition-transform duration-150 hover:scale-110"
-            style={{ 
-              backgroundColor: color,
-              boxShadow: "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px"
-            }}
+            disabled={isReadOnly}
+            className="clay-color-btn flex items-center justify-center w-11 h-11 shrink-0 rounded-full"
           >
-            {strokeColor === color && (
-              <span className="absolute inset-0 rounded-full ring-2 ring-offset-2 ring-[#000000]" />
-            )}
+            <span
+              className="clay-color-dot w-6 h-6 sm:w-7 sm:h-7 rounded-full relative"
+              style={{
+                backgroundColor: color,
+                boxShadow: "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px",
+              }}
+            >
+              {strokeColor === color && (
+                <span className="absolute inset-0 rounded-full ring-2 ring-offset-2 ring-[#000000]" />
+              )}
+            </span>
           </button>
         ))}
       </div>
+
+      {/* Share dialog */}
+      {roomId && (
+        <ShareDialog
+          roomId={roomId}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </>
   );
 }

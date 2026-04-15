@@ -16,6 +16,7 @@ import {
   saveScene,
   type PersistedSceneV1,
 } from "@/lib/storage";
+import { uploadImageToR2 } from "@/lib/upload";
 
 import PenElement from "@/elements/PenElement";
 import ShapeElement from "@/elements/ShapeElement";
@@ -63,6 +64,10 @@ interface ResizingState {
   origY2?: number;
 }
 
+interface CanvasProps {
+  roomId?: string;
+}
+
 function getSvgPathFromStroke(stroke: number[][]): string {
   if (!stroke.length) return "";
 
@@ -79,7 +84,7 @@ function getSvgPathFromStroke(stroke: number[][]): string {
   return d.join(" ");
 }
 
-export default function Canvas() {
+export default function Canvas({ roomId }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   const elements = useCanvasStore((s) => s.elements);
@@ -89,16 +94,22 @@ export default function Canvas() {
   const strokeColor = useCanvasStore((s) => s.strokeColor);
   const fillColor = useCanvasStore((s) => s.fillColor);
   const strokeWidth = useCanvasStore((s) => s.strokeWidth);
+  const isReadOnly = useCanvasStore((s) => s.isReadOnly);
   const setSelectedElementId = useCanvasStore((s) => s.setSelectedElementId);
+  const setCursor = useCanvasStore((s) => s.setCursor);
   const addElement = useCanvasStore((s) => s.addElement);
   const updateElement = useCanvasStore((s) => s.updateElement);
   const deleteElement = useCanvasStore((s) => s.deleteElement);
   const pushToHistory = useCanvasStore((s) => s.pushToHistory);
+  const pauseHistory = useCanvasStore((s) => s.pauseHistory);
+  const resumeHistory = useCanvasStore((s) => s.resumeHistory);
   const setCamera = useCanvasStore((s) => s.setCamera);
   const setActiveTool = useCanvasStore((s) => s.setActiveTool);
   const hydrateScene = useCanvasStore((s) => s.hydrateScene);
   const undo = useCanvasStore((s) => s.undo);
   const redo = useCanvasStore((s) => s.redo);
+  const liveblocksRoom = useCanvasStore((s) => s.liveblocks.room);
+  const isInRoom = !!liveblocksRoom;
 
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
@@ -111,9 +122,21 @@ export default function Canvas() {
   const [spaceHeld, setSpaceHeld] = useState(false);
   const objectUrlsRef = useRef<Set<string>>(new Set());
   const isHydratingRef = useRef(false);
+  const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const initialPinch = useRef<{
+    distance: number;
+    cx: number;
+    cy: number;
+    zoom: number;
+    cameraX: number;
+    cameraY: number;
+  } | null>(null);
+  const wasPinching = useRef(false);
 
-  // Hydrate scene + image blobs on first mount
+  // Hydrate scene + image blobs on first mount (local mode only — Liveblocks handles sync in rooms)
   useEffect(() => {
+    if (isInRoom) return;
+
     let cancelled = false;
 
     const run = async () => {
@@ -159,10 +182,11 @@ export default function Canvas() {
       }
       objectUrlsRef.current.clear();
     };
-  }, [hydrateScene]);
+  }, [hydrateScene, isInRoom]);
 
-  // Debounced autosave with legacy image migration
+  // Debounced autosave with legacy image migration (local mode only)
   useEffect(() => {
+    if (isInRoom) return; // Liveblocks handles persistence in rooms
     if (isHydratingRef.current) return;
 
     const timer = setTimeout(() => {
@@ -208,7 +232,7 @@ export default function Canvas() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [elements, camera, updateElement]);
+  }, [elements, camera, updateElement, isInRoom]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -274,7 +298,6 @@ export default function Canvas() {
           if (!file) continue;
 
           const objectUrl = URL.createObjectURL(file);
-          objectUrlsRef.current.add(objectUrl);
 
           const img = new Image();
           img.onload = () => {
@@ -288,6 +311,47 @@ export default function Canvas() {
                 h = Math.round(h * scale);
               }
 
+              const center = screenToCanvas(
+                window.innerWidth / 2,
+                window.innerHeight / 2,
+                camera
+              );
+
+              if (isInRoom) {
+                const placeholderId = addElement({
+                  type: "image" as const,
+                  x: center.x - w / 2,
+                  y: center.y - h / 2,
+                  width: w,
+                  height: h,
+                  uploadStatus: "uploading" as const,
+                  uploadProgress: 0,
+                  strokeColor: "transparent",
+                  fillColor: "transparent",
+                  strokeWidth: 0,
+                  opacity: 1,
+                });
+                pushToHistory();
+
+                try {
+                  const { publicUrl, key } = await uploadImageToR2(file, roomId);
+                  updateElement(placeholderId, {
+                    r2Key: key,
+                    src: publicUrl,
+                    uploadStatus: "ready",
+                    uploadProgress: 100,
+                  });
+                } catch (err) {
+                  console.warn("Failed to upload pasted image to collaborative storage", err);
+                  updateElement(placeholderId, {
+                    uploadStatus: "failed",
+                  });
+                } finally {
+                  URL.revokeObjectURL(objectUrl);
+                }
+                return;
+              }
+
               let imageId: string | undefined;
               try {
                 imageId = await saveImageBlob(file);
@@ -295,12 +359,7 @@ export default function Canvas() {
                 console.warn("Failed to persist pasted image blob", err);
               }
 
-              const center = screenToCanvas(
-                window.innerWidth / 2,
-                window.innerHeight / 2,
-                camera
-              );
-
+              objectUrlsRef.current.add(objectUrl);
               addElement({
                 type: "image" as const,
                 x: center.x - w / 2,
@@ -335,7 +394,7 @@ export default function Canvas() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("paste", handlePaste);
     };
-  }, [textEditor, selectedElementId, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements]);
+  }, [textEditor, selectedElementId, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements, isInRoom, roomId]);
 
   // Zoom and Pan with scroll/trackpad
   useEffect(() => {
@@ -387,13 +446,46 @@ export default function Canvas() {
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (e.button === 1 || spaceHeld) {
+      activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.current.size >= 2) {
+        if (drawing) {
+          setDrawing(null);
+          resumeHistory();
+        }
+        setDragging(null);
+        setResizing(null);
+        setIsPanning(false);
+        wasPinching.current = true;
+
+        const pts = Array.from(activePointers.current.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        const distance = Math.hypot(dx, dy);
+        const cx = (pts[0].x + pts[1].x) / 2;
+        const cy = (pts[0].y + pts[1].y) / 2;
+
+        initialPinch.current = {
+          distance,
+          cx,
+          cy,
+          zoom: camera.zoom,
+          cameraX: camera.x,
+          cameraY: camera.y,
+        };
+        return;
+      }
+
+      if (e.button === 1 || spaceHeld || activeTool === "pan") {
         setIsPanning(true);
         setPanStart({ x: e.clientX, y: e.clientY });
         return;
       }
 
       if (e.button !== 0) return;
+
+      // Read-only users can only pan and zoom
+      if (isReadOnly) return;
 
       const pt = getCanvasPoint(e);
 
@@ -443,6 +535,8 @@ export default function Canvas() {
         activeTool === "line" ||
         activeTool === "arrow"
       ) {
+        // Pause Liveblocks history so the entire stroke is one undo step
+        pauseHistory();
         (e.target as Element)?.setPointerCapture?.(e.pointerId);
         setDrawing({
           type: activeTool,
@@ -454,11 +548,55 @@ export default function Canvas() {
         });
       }
     },
-    [activeTool, getCanvasPoint, spaceHeld, setSelectedElementId]
+    [activeTool, getCanvasPoint, spaceHeld, setSelectedElementId, isReadOnly, pauseHistory]
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
+      if (activePointers.current.has(e.pointerId)) {
+        activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      if (activePointers.current.size >= 2) {
+        if (!initialPinch.current) return;
+        const pts = Array.from(activePointers.current.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        const distance = Math.hypot(dx, dy);
+        const cx = (pts[0].x + pts[1].x) / 2;
+        const cy = (pts[0].y + pts[1].y) / 2;
+
+        const init = initialPinch.current;
+        let newZoom = init.zoom * (distance / init.distance);
+        newZoom = Math.min(Math.max(newZoom, 0.1), 5);
+
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (rect) {
+          const scaleDelta = newZoom / init.zoom;
+          const mx = init.cx - rect.left;
+          const my = init.cy - rect.top;
+
+          const zX = mx - (mx - init.cameraX) * scaleDelta;
+          const zY = my - (my - init.cameraY) * scaleDelta;
+
+          const panX = cx - init.cx;
+          const panY = cy - init.cy;
+
+          setCamera({
+            zoom: newZoom,
+            x: zX + panX,
+            y: zY + panY,
+          });
+        }
+        return;
+      }
+
+      // Broadcast cursor position to other users in the room
+      if (isInRoom) {
+        const pt = getCanvasPoint(e);
+        setCursor({ x: pt.x, y: pt.y });
+      }
+
       if (isPanning && panStart) {
         setCamera({
           x: camera.x + (e.clientX - panStart.x),
@@ -557,10 +695,21 @@ export default function Canvas() {
         });
       }
     },
-    [isPanning, panStart, resizing, dragging, drawing, camera, getCanvasPoint, setCamera, updateElement, elements]
+    [isPanning, panStart, resizing, dragging, drawing, camera, getCanvasPoint, setCamera, updateElement, elements, isInRoom, setCursor]
   );
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    activePointers.current.delete(e.pointerId);
+    if (activePointers.current.size < 2) {
+      initialPinch.current = null;
+    }
+    if (wasPinching.current) {
+      if (activePointers.current.size === 0) {
+        wasPinching.current = false;
+      }
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setPanStart(null);
@@ -645,8 +794,10 @@ export default function Canvas() {
       }
     }
 
+    // Resume Liveblocks history batching so the entire stroke is one undo step
+    resumeHistory();
     setDrawing(null);
-  }, [drawing, dragging, resizing, isPanning, addElement, pushToHistory, strokeColor, fillColor, strokeWidth]);
+  }, [drawing, dragging, resizing, isPanning, addElement, pushToHistory, resumeHistory, strokeColor, fillColor, strokeWidth]);
 
   const handleElementSelect = useCallback(
     (id: string) => {
@@ -859,8 +1010,8 @@ export default function Canvas() {
     return null;
   };
 
-  const cursorStyle = spaceHeld || isPanning
-    ? "grab"
+  const cursorStyle = spaceHeld || isPanning || activeTool === "pan"
+    ? (isPanning ? "grabbing" : "grab")
     : activeTool === "select"
     ? "default"
     : activeTool === "text"
@@ -920,6 +1071,7 @@ export default function Canvas() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         <defs>
           <filter id="selection-glow">

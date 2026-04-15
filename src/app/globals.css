@@ -34,12 +34,6 @@
   --color-oat: var(--border-oat);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 html,
 body {
   height: 100%;
@@ -48,11 +42,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
-  font-feature-settings: "ss03", "ss10", "ss11", "ss12";
-}
-
-h1, h2, h3, h4, h5, h6, .display-text {
-  font-feature-settings: "ss01", "ss03", "ss10", "ss11", "ss12";
 }
 
 svg {
@@ -67,32 +56,141 @@ svg {
   box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
 }
 
+/* Toolbar overflow: visible on desktop (pop-out), scrollable on mobile */
+.clay-toolbar {
+  overflow: visible;
+}
+
+@media (max-width: 639px) {
+  .clay-toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .clay-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Tool Buttons ── */
 .clay-btn {
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   background: transparent;
   color: #000000;
   border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.clay-btn:hover {
-  transform: rotateZ(-8deg) translateY(-20%);
-  box-shadow: -7px 7px 0px 0px #000000;
-  background: var(--color-matcha-600);
-  color: #ffffff;
+/* Invisible hit-area extension — stabilizes hover when button pops up */
+.clay-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
 }
 
+/* Playful pop-out hover — mouse/trackpad users only */
+@media (hover: hover) and (pointer: fine) {
+  .clay-btn:hover {
+    transform: rotateZ(-8deg) translateY(-50%);
+    box-shadow: -7px 7px 0px 0px #000000;
+    background: var(--color-matcha-600);
+    color: #ffffff;
+  }
+
+  .clay-btn:hover::after {
+    bottom: -50%;
+  }
+
+  .clay-btn-active:hover {
+    background: var(--color-blueberry-800);
+    transform: none;
+    box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+  }
+}
+
+/* Touch press feedback — touchscreen users */
+@media (pointer: coarse) {
+  .clay-btn:active {
+    transform: scale(0.90);
+    transition-duration: 0.1s;
+    background: var(--color-matcha-600);
+    color: #ffffff;
+  }
+
+  .clay-btn-active:active {
+    background: var(--color-blueberry-800);
+    transform: scale(0.92);
+  }
+}
+
+/* Active tool state */
 .clay-btn-active {
   background: var(--color-blueberry-800);
   color: #ffffff;
+  border-radius: 12px;
   box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
 }
 
-.clay-btn-active:hover {
-  background: var(--color-blueberry-800);
-  transform: none;
-  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+/* Focus visible — keyboard navigation */
+.clay-btn:focus-visible {
+  outline: 2px solid rgb(20, 110, 245);
+  outline-offset: 2px;
+  z-index: 1;
 }
 
+/* ── Color Swatch Buttons ── */
+.clay-color-btn {
+  cursor: pointer;
+  position: relative;
+  border: none;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .clay-color-btn:hover .clay-color-dot {
+    transform: scale(1.2);
+  }
+}
+
+@media (pointer: coarse) {
+  .clay-color-btn:active .clay-color-dot {
+    transform: scale(0.85);
+  }
+}
+
+.clay-color-dot {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.clay-color-btn:focus-visible {
+  outline: 2px solid rgb(20, 110, 245);
+  outline-offset: 3px;
+  border-radius: 9999px;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .clay-btn {
+    transition-duration: 0.01ms !important;
+  }
+  .clay-btn:hover,
+  .clay-btn:active {
+    transform: none !important;
+  }
+  .clay-color-dot {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Inputs ── */
 .clay-input {
   border: 1px solid #717989;
   border-radius: 4px;

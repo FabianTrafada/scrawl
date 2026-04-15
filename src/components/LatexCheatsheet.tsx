@@ -147,7 +147,7 @@ export default function LatexCheatsheet() {
       <button
         onClick={() => setOpen(true)}
         title="LaTeX cheatsheet"
-        className="fixed top-4 right-4 sm:top-auto sm:bottom-4 sm:right-4 z-50 w-9 h-9 flex items-center justify-center text-base font-bold transition-all duration-200"
+        className="hidden sm:flex fixed sm:bottom-4 sm:right-4 z-50 w-9 h-9 items-center justify-center text-base font-bold transition-all duration-200"
         style={{
           borderRadius: 1584,
           background: "#ffffff",

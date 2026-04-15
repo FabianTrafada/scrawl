@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
-import { Outfit, Fira_Code, Patrick_Hand } from "next/font/google";
+import { Syne, Space_Mono, Patrick_Hand } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
-const outfit = Outfit({
+const syne = Syne({
   variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const firaCode = Fira_Code({
+const spaceMono = Space_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 const patrickHand = Patrick_Hand({
@@ -39,11 +42,11 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Scrawl" }],
   creator: "Scrawl",
-  metadataBase: new URL("https://scrawl-lovat.vercel.app"),
+  metadataBase: new URL("https://scrawl.site"),
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://scrawl-lovat.vercel.app",
+    url: "https://scrawl.site",
     siteName: "Scrawl",
     title: "Scrawl — Freeform Whiteboard with LaTeX Math Rendering",
     description:
@@ -99,9 +102,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${outfit.variable} ${firaCode.variable} ${patrickHand.variable} h-full antialiased`}
+      className={`${syne.variable} ${spaceMono.variable} ${patrickHand.variable} h-full antialiased`}
     >
-      <body className="h-full w-full overflow-hidden">{children}</body>
+      <body className="h-full w-full overflow-hidden">
+        {children}
+        <Toaster position="bottom-right" toastOptions={{ className: "font-sans" }} />
+      </body>
     </html>
   );
 }
