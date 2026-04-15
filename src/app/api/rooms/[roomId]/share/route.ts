@@ -49,8 +49,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const memberEmails = new Set(
     room.members
       .map((m: { user: { email: string | null } }) => m.user.email)
-      .filter((email): email is string => Boolean(email))
-      .map((email) => email.toLowerCase())
+      .filter((email: string | null): email is string => Boolean(email))
+      .map((email: string) => email.toLowerCase())
   );
   if (room.owner.email) {
     memberEmails.add(room.owner.email.toLowerCase());
