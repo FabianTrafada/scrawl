@@ -66,7 +66,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
     isOwner: true,
     defaultAccess: room.defaultAccess,
     owner: room.owner,
-    members: room.members.map((m) => ({
+    members: room.members.map((m: {
+      id: string;
+      access: string;
+      user: { id: string; name: string | null; email: string | null; image: string | null };
+    }) => ({
       id: m.id,
       access: m.access,
       user: m.user,
