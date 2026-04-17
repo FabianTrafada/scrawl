@@ -146,7 +146,7 @@ export function hasAnalyticsConsent(): boolean {
 
 export function getCookieConsentSnapshotKey(): string {
   const record = readCookieConsent();
-  if (shouldPromptCookieConsent(record)) return "prompt";
+  if (!record || !isCookieConsentCurrent(record)) return "prompt";
 
   return [
     "accepted",
