@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useRef, useState } from "react";
 import type { TextElement as TextElementType } from "@/store/canvasStore";
+import { useCanvasStore } from "@/store/canvasStore";
 import { renderLatexToDisplayHTML } from "@/lib/latex";
 
 interface Props {
@@ -19,6 +20,19 @@ export default function TextElementRenderer({
   onDoubleClick,
   onResize,
 }: Props) {
+  const activeTool = useCanvasStore((s) => s.activeTool);
+  const isEraser = activeTool === "eraser";
+
+  const DEFAULT_STROKE = "#1e1e1e";
+  const isDefaultStroke =
+    element.strokeColor?.toLowerCase() === DEFAULT_STROKE.toLowerCase();
+
+  const effectiveStroke = isDefaultStroke
+    ? "var(--tool-default-stroke)"
+    : element.strokeColor;
+
+  const glow = isDefaultStroke ? "var(--tool-default-stroke-glow)" : undefined;
+
   const contentRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: element.width || 60, h: element.height || 30 });
 
@@ -47,11 +61,13 @@ export default function TextElementRenderer({
   }, [latexHtml, element.content, element.fontSize, element.width, element.id, element.userResized, onResize]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (isEraser) return;
     e.stopPropagation();
     onSelect(element.id);
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isEraser) return;
     e.stopPropagation();
     onDoubleClick(element.id);
   };
@@ -84,15 +100,15 @@ export default function TextElementRenderer({
         y={element.y}
         width={Math.max(displayW + 4, 60)}
         height={Math.max(displayH + 4, 30)}
-        style={{ overflow: "visible" }}
+        style={{ overflow: "visible", pointerEvents: isEraser ? "none" : "auto" }}
       >
         <div
           ref={contentRef}
-          onPointerDown={handlePointerDown}
-          onDoubleClick={handleDoubleClick}
+          onPointerDown={isEraser ? undefined : handlePointerDown}
+          onDoubleClick={isEraser ? undefined : handleDoubleClick}
           style={{
             fontSize: element.fontSize,
-            color: element.strokeColor,
+            color: effectiveStroke,
             cursor: "move",
             userSelect: "none",
             padding: 4,
@@ -102,6 +118,8 @@ export default function TextElementRenderer({
             maxWidth: element.userResized ? displayW : undefined,
             fontFamily: element.isLatex ? undefined : "var(--font-hand)",
             display: "inline-block",
+            filter: glow,
+            pointerEvents: isEraser ? "none" : "auto",
           }}
           dangerouslySetInnerHTML={
             element.isLatex ? { __html: latexHtml } : undefined

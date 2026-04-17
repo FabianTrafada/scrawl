@@ -20,6 +20,7 @@ const AVATAR_COLORS = [
  */
 export default function PresenceAvatars() {
   const others = useCanvasStore((s) => s.liveblocks.others);
+  const activePresenterId = useCanvasStore((s) => s.activePresenterId);
 
   if (!others || others.length === 0) return null;
 
@@ -37,7 +38,7 @@ export default function PresenceAvatars() {
 
   return (
     <div
-      className="fixed top-6 right-6 z-50 flex items-center gap-[-8px]"
+      className="clay-card clay-card-dashed px-2 py-1.5 rounded-full flex items-center max-w-[38vw] sm:max-w-none overflow-hidden"
       aria-label={`${uniqueOthers.length} other user${uniqueOthers.length > 1 ? "s" : ""} connected`}
     >
       {uniqueOthers.slice(0, 5).map((other, i) => {
@@ -66,7 +67,7 @@ export default function PresenceAvatars() {
           <div
             key={other.connectionId}
             title={name}
-            className="relative -ml-2 first:ml-0 w-9 h-9 rounded-full border-2 border-[var(--background)] flex items-center justify-center text-[11px] font-semibold text-white select-none shadow-[rgba(0,0,0,0.1)_0px_1px_3px]"
+            className="relative -ml-2 first:ml-0 w-8 h-8 rounded-full border-2 border-[var(--surface)] flex items-center justify-center text-[11px] font-semibold text-[var(--on-accent)] select-none shadow-[rgba(0,0,0,0.16)_0px_2px_6px]"
             style={{ backgroundColor: color, zIndex: 5 - i }}
           >
             {avatarSrc ? (
@@ -79,12 +80,17 @@ export default function PresenceAvatars() {
             ) : (
               initials
             )}
+            {other.id === activePresenterId && (
+              <span className="absolute -bottom-1 -right-1 text-[9px] px-1 rounded bg-[var(--color-slushie-500)] text-white shadow-[rgba(0,0,0,0.2)_0px_1px_2px]">
+                Live
+              </span>
+            )}
           </div>
         );
       })}
       {uniqueOthers.length > 5 && (
         <div
-          className="-ml-2 w-9 h-9 rounded-full border-2 border-[var(--background)] bg-[var(--color-warm-charcoal)] flex items-center justify-center text-[11px] font-semibold text-white select-none shadow-[rgba(0,0,0,0.1)_0px_1px_3px]"
+          className="-ml-2 w-8 h-8 rounded-full border-2 border-[var(--surface)] bg-[var(--color-warm-charcoal)] flex items-center justify-center text-[11px] font-semibold text-[var(--on-accent)] select-none shadow-[rgba(0,0,0,0.16)_0px_2px_6px]"
           style={{ zIndex: 0 }}
         >
           +{uniqueOthers.length - 5}

@@ -150,26 +150,24 @@ export default function LatexCheatsheet() {
         className="hidden sm:flex fixed sm:bottom-4 sm:right-4 z-50 w-9 h-9 items-center justify-center text-base font-bold transition-all duration-200"
         style={{
           borderRadius: 1584,
-          background: "#ffffff",
+          background: "var(--surface)",
           border: "1px solid var(--border-oat)",
-          boxShadow:
-            "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px",
+          boxShadow: "var(--clay-shadow)",
           cursor: "pointer",
-          color: "var(--color-warm-charcoal)",
+          color: "var(--foreground)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "rotateZ(-8deg) translateY(-20%)";
-          e.currentTarget.style.boxShadow = "-7px 7px 0px 0px #000000";
+          e.currentTarget.style.boxShadow = "-7px 7px 0px 0px var(--clay-shadow-hard)";
           e.currentTarget.style.background = "var(--color-slushie-500)";
-          e.currentTarget.style.color = "#fff";
+          e.currentTarget.style.color = "var(--on-accent)";
           e.currentTarget.style.borderColor = "var(--color-slushie-500)";
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = "";
-          e.currentTarget.style.boxShadow =
-            "rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px";
-          e.currentTarget.style.background = "#ffffff";
-          e.currentTarget.style.color = "var(--color-warm-charcoal)";
+          e.currentTarget.style.boxShadow = "var(--clay-shadow)";
+          e.currentTarget.style.background = "var(--surface)";
+          e.currentTarget.style.color = "var(--foreground)";
           e.currentTarget.style.borderColor = "var(--border-oat)";
         }}
       >
@@ -195,10 +193,10 @@ export default function LatexCheatsheet() {
           <div
             ref={modalRef}
             style={{
-              background: "var(--background)",
+              background: "var(--surface)",
               border: "1px solid var(--border-oat)",
               borderRadius: 24,
-              boxShadow: "rgba(0,0,0,0.15) 0px 20px 60px",
+              boxShadow: "0px 20px 60px rgba(0,0,0,0.3)",
               width: "min(640px, 90vw)",
               maxHeight: "80vh",
               overflow: "hidden",
@@ -234,7 +232,7 @@ export default function LatexCheatsheet() {
                   background: "transparent",
                   cursor: "pointer",
                   fontSize: 16,
-                  color: "var(--color-warm-charcoal)",
+                  color: "var(--foreground)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -265,7 +263,7 @@ export default function LatexCheatsheet() {
                       <div
                         key={item.cmd}
                         style={{
-                          background: "#ffffff",
+                          background: "var(--surface-overlay)",
                           border: "1px solid var(--border-oat)",
                           borderRadius: 10,
                           padding: "8px 12px",
@@ -283,7 +281,8 @@ export default function LatexCheatsheet() {
                               fontFamily: "var(--font-mono)",
                               fontSize: 12,
                               color: "var(--foreground)",
-                              background: "var(--background)",
+                              background: "var(--input-bg)",
+                              border: "1px solid var(--border-oat-light)",
                               padding: "2px 6px",
                               borderRadius: 6,
                               display: "inline-block",

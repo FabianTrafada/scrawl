@@ -2,10 +2,50 @@
 @import "katex/dist/katex.min.css";
 
 :root {
-  --background: #faf9f7; /* Warm Cream */
+  --background: #ffffff;
   --foreground: #000000; /* Clay Black */
-  
+
+  /* Theme surfaces (used by cards/dialogs/overlays) */
+  --surface: #ffffff;
+  --surface-soft: #fdf9f1;
+  --surface-strong: #fffdf8;
+  --surface-elevated: rgba(255, 255, 255, 0.85);
+  --surface-overlay: rgba(255, 255, 255, 0.9);
+  --surface-tint: rgba(251, 189, 65, 0.15);
+
+  /* Overlay hover feedback */
+  --surface-overlay-hover-weak: rgba(255, 255, 255, 0.15);
+  --surface-overlay-hover-border: rgba(255, 255, 255, 0.6);
+
+  /* Inputs (select/input backgrounds) */
+  --input-bg: #ffffff;
+  --input-border: #717989;
+
+  /* On-color text (for swatch/colored backgrounds) */
+  --on-accent: #ffffff;
+
+  /* Text on top of `--foreground` (used for solid foreground buttons) */
+  --on-foreground: #ffffff;
+
+  --focus-ring: rgb(20, 110, 245);
+
+  /* Default tool color remapping for dark mode (visual-only). */
+  --tool-default-stroke: #1e1e1e;
+  --tool-default-stroke-glow: none;
+
+  /* Shadows */
+  --clay-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+  --clay-shadow-hard: #000000;
+  --panel-shadow: rgba(39, 33, 18, 0.08) 0px 8px 28px;
+  --panel-shadow-soft: rgba(53, 45, 27, 0.08) 0px 2px 10px;
+
+  /* Atmospheric background spots */
+  --bg-spot-a: rgba(248, 204, 101, 0.3);
+  --bg-spot-b: rgba(59, 211, 253, 0.2);
+  --bg-spot-c: rgba(252, 121, 129, 0.2);
+
   /* Swatches */
+  --color-matcha-300: #84e7a5;
   --color-matcha-600: #078a52;
   --color-slushie-500: #3bd3fd;
   --color-lemon-500: #fbbd41;
@@ -20,11 +60,98 @@
   /* Borders */
   --border-oat: #dad4c8;
   --border-oat-light: #eee9df;
+
+  /* Utility alias used across UI components */
+  --text-muted: var(--color-warm-silver);
+  --muted: var(--color-warm-silver);
+}
+
+html[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #f3f4f6;
+
+  --surface: #0f1211;
+  --surface-soft: #141b18;
+  --surface-strong: #1a211d;
+  --surface-elevated: rgba(17, 22, 20, 0.84);
+  --surface-overlay: rgba(15, 18, 17, 0.72);
+  --surface-tint: rgba(59, 211, 253, 0.12);
+
+  --surface-overlay-hover-weak: rgba(255, 255, 255, 0.1);
+  --surface-overlay-hover-border: rgba(255, 255, 255, 0.35);
+
+  --input-bg: #0f1211;
+  --input-border: #343a44;
+
+  --on-accent: #ffffff;
+  --on-foreground: #0b0c0a;
+  --focus-ring: rgb(89, 175, 255);
+
+  --tool-default-stroke: #ffffff;
+  --tool-default-stroke-glow: drop-shadow(0px 0px 3px rgba(255,255,255,0.9)) drop-shadow(0px 0px 10px rgba(255,255,255,0.35));
+
+  --clay-shadow: rgba(0,0,0,0.7) 0px 1px 1px, rgba(0,0,0,0.35) 0px -1px 1px inset, rgba(0,0,0,0.4) 0px -0.5px 1px;
+  --clay-shadow-hard: rgba(255,255,255,0.14);
+  --panel-shadow: rgba(0, 0, 0, 0.35) 0px 14px 34px;
+  --panel-shadow-soft: rgba(0, 0, 0, 0.2) 0px 6px 16px;
+
+  --bg-spot-a: rgba(67, 8, 159, 0.2);
+  --bg-spot-b: rgba(1, 65, 141, 0.24);
+  --bg-spot-c: rgba(7, 138, 82, 0.16);
+
+  --color-warm-silver: #9aa19a;
+  --color-warm-charcoal: #d6d6c9;
+
+  --border-oat: #2a2f37;
+  --border-oat-light: #212633;
+  --muted: #9aa19a;
+}
+
+/* System mode: when data-theme isn't explicitly set to light, respect OS preference */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --background: #000000;
+    --foreground: #f3f4f6;
+
+    --surface: #0f1211;
+    --surface-soft: #141b18;
+    --surface-strong: #1a211d;
+    --surface-elevated: rgba(17, 22, 20, 0.84);
+    --surface-overlay: rgba(15, 18, 17, 0.72);
+    --surface-tint: rgba(59, 211, 253, 0.12);
+
+    --input-bg: #0f1211;
+    --input-border: #343a44;
+
+    --on-accent: #ffffff;
+    --focus-ring: rgb(89, 175, 255);
+    --tool-default-stroke: #ffffff;
+    --tool-default-stroke-glow: drop-shadow(0px 0px 3px rgba(255,255,255,0.9)) drop-shadow(0px 0px 10px rgba(255,255,255,0.35));
+
+    --clay-shadow: rgba(0,0,0,0.7) 0px 1px 1px, rgba(0,0,0,0.35) 0px -1px 1px inset, rgba(0,0,0,0.4) 0px -0.5px 1px;
+    --clay-shadow-hard: rgba(255,255,255,0.14);
+    --panel-shadow: rgba(0, 0, 0, 0.35) 0px 14px 34px;
+    --panel-shadow-soft: rgba(0, 0, 0, 0.2) 0px 6px 16px;
+
+    --bg-spot-a: rgba(67, 8, 159, 0.2);
+    --bg-spot-b: rgba(1, 65, 141, 0.24);
+    --bg-spot-c: rgba(7, 138, 82, 0.16);
+
+    --color-warm-silver: #9aa19a;
+    --color-warm-charcoal: #d6d6c9;
+
+    --border-oat: #2a2f37;
+    --border-oat-light: #212633;
+    --muted: #9aa19a;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-input-bg: var(--input-bg);
   --color-matcha: var(--color-matcha-600);
   --color-slushie: var(--color-slushie-500);
   --color-lemon: var(--color-lemon-500);
@@ -39,9 +166,17 @@ body {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--background);
+  background-color: var(--background);
+  background-image: none;
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-feature-settings: "ss03" 1, "ss10" 1, "ss11" 1, "ss12" 1;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-slushie-500) 45%, transparent);
+  color: var(--foreground);
 }
 
 svg {
@@ -50,10 +185,72 @@ svg {
 
 /* Clay Design System Classes */
 .clay-card {
-  background: #ffffff;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 95%, var(--surface-tint) 5%), var(--surface)),
+    var(--surface);
   border: 1px solid var(--border-oat);
   border-radius: 24px;
-  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+  box-shadow: var(--clay-shadow), var(--panel-shadow-soft);
+  backdrop-filter: blur(8px);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.clay-mobile-sheet {
+  border-top-left-radius: 26px;
+  border-top-right-radius: 26px;
+}
+
+.clay-card-dashed {
+  border-style: dashed;
+}
+
+.clay-kicker {
+  font-size: 11px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 1.08px;
+  color: var(--color-warm-silver);
+  font-weight: 600;
+}
+
+.clay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-oat);
+  background: color-mix(in srgb, var(--surface-soft) 88%, var(--surface-tint) 12%);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-warm-charcoal);
+}
+
+.clay-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, var(--border-oat), transparent);
+}
+
+.clay-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-warm-silver) 45%, transparent) transparent;
+}
+
+.clay-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.clay-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-warm-silver) 45%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.clay-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Toolbar overflow: visible on desktop (pop-out), scrollable on mobile */
@@ -77,11 +274,14 @@ svg {
 .clay-btn {
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   background: transparent;
-  color: #000000;
+  color: var(--foreground);
   border-radius: 12px;
+  border: 1px solid transparent;
   position: relative;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  font-weight: 500;
+  font-feature-settings: "ss03" 1, "ss10" 1, "ss11" 1, "ss12" 1;
 }
 
 /* Invisible hit-area extension — stabilizes hover when button pops up */
@@ -97,34 +297,35 @@ svg {
 
 /* Playful pop-out hover — mouse/trackpad users only */
 @media (hover: hover) and (pointer: fine) {
-  .clay-btn:hover {
+  .clay-toolbar .clay-btn:hover {
     transform: rotateZ(-8deg) translateY(-50%);
-    box-shadow: -7px 7px 0px 0px #000000;
+    box-shadow: -7px 7px 0px 0px var(--clay-shadow-hard);
     background: var(--color-matcha-600);
-    color: #ffffff;
+    color: var(--on-accent);
+    border-color: color-mix(in srgb, var(--color-matcha-600) 78%, #000000 22%);
   }
 
-  .clay-btn:hover::after {
+  .clay-toolbar .clay-btn:hover::after {
     bottom: -50%;
   }
 
-  .clay-btn-active:hover {
+  .clay-toolbar .clay-btn-active:hover {
     background: var(--color-blueberry-800);
     transform: none;
-    box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+    box-shadow: var(--clay-shadow);
   }
 }
 
 /* Touch press feedback — touchscreen users */
 @media (pointer: coarse) {
-  .clay-btn:active {
+  .clay-toolbar .clay-btn:active {
     transform: scale(0.90);
     transition-duration: 0.1s;
     background: var(--color-matcha-600);
-    color: #ffffff;
+    color: var(--on-accent);
   }
 
-  .clay-btn-active:active {
+  .clay-toolbar .clay-btn-active:active {
     background: var(--color-blueberry-800);
     transform: scale(0.92);
   }
@@ -133,16 +334,38 @@ svg {
 /* Active tool state */
 .clay-btn-active {
   background: var(--color-blueberry-800);
-  color: #ffffff;
+  color: var(--on-accent);
   border-radius: 12px;
-  box-shadow: rgba(0,0,0,0.1) 0px 1px 1px, rgba(0,0,0,0.04) 0px -1px 1px inset, rgba(0,0,0,0.05) 0px -0.5px 1px;
+  box-shadow: var(--clay-shadow);
 }
 
 /* Focus visible — keyboard navigation */
 .clay-btn:focus-visible {
-  outline: 2px solid rgb(20, 110, 245);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   z-index: 1;
+}
+
+/* Optional hover animation for non-toolbar UX buttons */
+.clay-btn-ux {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .clay-btn-ux:hover {
+    transform: rotateZ(-1.5deg) translateY(-2px);
+    box-shadow: -4px 4px 0px 0px var(--clay-shadow-hard);
+    background: var(--color-slushie-500);
+    color: var(--on-accent);
+    border-color: color-mix(in srgb, var(--color-slushie-500) 72%, #000000 28%);
+  }
+}
+
+@media (pointer: coarse) {
+  .clay-btn-ux:active {
+    transform: scale(0.97);
+  }
 }
 
 /* ── Color Swatch Buttons ── */
@@ -192,11 +415,103 @@ svg {
 
 /* ── Inputs ── */
 .clay-input {
-  border: 1px solid #717989;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
-  color: #000000;
+  color: var(--foreground);
+  background: var(--input-bg);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.clay-input::placeholder {
+  color: color-mix(in srgb, var(--color-warm-silver) 82%, transparent);
 }
 
 .clay-input:focus {
-  outline: 2px solid rgb(20, 110, 245);
+  outline: none;
+  border-color: color-mix(in srgb, var(--focus-ring) 58%, var(--input-border) 42%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 32%, transparent);
+}
+
+.clay-input:focus-visible {
+  outline: none;
+}
+
+/* Cookie consent banner */
+.cookie-consent-banner {
+  animation: cookie-consent-slide-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cookie-consent-toggle {
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid var(--border-oat);
+  background: color-mix(in srgb, var(--surface-soft) 85%, var(--surface-tint) 15%);
+  padding: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.cookie-consent-toggle-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-oat-light);
+  box-shadow: var(--panel-shadow-soft);
+  transform: translateX(0px);
+  transition: transform 0.18s ease;
+}
+
+.cookie-consent-toggle-on {
+  background: color-mix(in srgb, var(--color-matcha-600) 72%, #ffffff 28%);
+  border-color: color-mix(in srgb, var(--color-matcha-600) 72%, #000000 28%);
+}
+
+.cookie-consent-toggle-on .cookie-consent-toggle-knob {
+  transform: translateX(20px);
+}
+
+.cookie-consent-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.cookie-consent-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+html:has(.cookie-consent-banner) .cookie-aware-footer {
+  transform: translateY(-10.5rem);
+  transition: transform 0.2s ease;
+}
+
+@keyframes cookie-consent-slide-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cookie-consent-banner {
+    animation: none;
+  }
+
+  .cookie-consent-toggle,
+  .cookie-consent-toggle-knob {
+    transition-duration: 0.01ms !important;
+  }
+
+  html:has(.cookie-consent-banner) .cookie-aware-footer {
+    transition: none;
+  }
 }

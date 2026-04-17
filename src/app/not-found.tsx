@@ -18,7 +18,7 @@ export default function NotFound() {
         }}
       ></div>
 
-      <div className="relative z-10 w-full max-w-md mx-auto clay-card flex flex-col bg-white rounded-[32px] p-10 text-center shadow-sm">
+      <div className="relative z-10 w-full max-w-md mx-auto clay-card flex flex-col bg-[var(--surface)] rounded-[32px] p-10 text-center shadow-sm">
         <div className="flex flex-col items-center">
           <div className="w-20 h-20 mb-8 bg-[var(--background)] rounded-full flex items-center justify-center border border-dashed border-[var(--color-warm-silver)]">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-warm-silver)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +36,7 @@ export default function NotFound() {
           
           <Link
             href="/"
-            className="group flex items-center justify-center gap-2 px-6 py-4 w-full rounded-2xl bg-[var(--foreground)] text-white text-[15px] font-semibold hover:-translate-y-1 hover:shadow-[-4px_4px_0px_0px_var(--color-warm-silver)] active:translate-y-0 active:shadow-none transition-all duration-200"
+            className="group flex items-center justify-center gap-2 px-6 py-4 w-full rounded-2xl bg-[var(--foreground)] text-[var(--on-foreground)] text-[15px] font-semibold hover:-translate-y-1 hover:shadow-[-4px_4px_0px_0px_var(--color-warm-silver)] active:translate-y-0 active:shadow-none transition-all duration-200"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform">
               <path d="M19 12H5M12 19l-7-7 7-7"/>

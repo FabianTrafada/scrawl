@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import type { ImageElement as ImageElementType } from "@/store/canvasStore";
+import { useCanvasStore } from "@/store/canvasStore";
 
 interface Props {
   element: ImageElementType;
@@ -10,6 +11,9 @@ interface Props {
 }
 
 export default function ImageElement({ element, isSelected, onSelect }: Props) {
+  const activeTool = useCanvasStore((s) => s.activeTool);
+  const isEraser = activeTool === "eraser";
+
   const imgRef = useRef<SVGImageElement>(null);
   const [size, setSize] = useState({ w: element.width, h: element.height });
   const shimmerId = `upload-shimmer-${element.id}`;
@@ -21,6 +25,7 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
   }, [element.width, element.height]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (isEraser) return;
     e.stopPropagation();
     onSelect(element.id);
   };
@@ -31,7 +36,7 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
   const canRenderImage = !!element.src && !isUploading;
 
   return (
-    <g>
+    <g style={{ pointerEvents: isEraser ? "none" : "auto" }}>
       {isUploading && (
         <defs>
           <linearGradient id={shimmerId} x1="0%" y1="0%" x2="100%" y2="0%">

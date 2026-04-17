@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCanvasStore } from "@/store/canvasStore";
 
 interface Member {
   id: string;
@@ -35,6 +36,7 @@ interface ShareDialogProps {
 
 export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps) {
   const router = useRouter();
+  const setShareDialogOpen = useCanvasStore((s) => s.setShareDialogOpen);
   const [data, setData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -70,6 +72,7 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
       });
       if (res.ok) {
         toast.success(data?.isOwner ? "Room closed successfully" : "Left room successfully");
+        setShareDialogOpen(false);
         router.push("/");
       } else {
         toast.error("Failed to close/leave room");
@@ -147,15 +150,21 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={() => {
+          setShareDialogOpen(false);
+          onClose();
+        }}
       />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-md mx-4 bg-white border border-[var(--border-oat)] rounded-2xl shadow-xl p-6 max-h-[80vh] overflow-y-auto">
+      <div className="relative w-full max-w-md mx-4 bg-[var(--surface)] border border-[var(--border-oat)] rounded-2xl shadow-xl p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-[var(--foreground)]">Share</h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setShareDialogOpen(false);
+              onClose();
+            }}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--background)] transition-colors cursor-pointer"
             aria-label="Close"
           >
@@ -186,7 +195,7 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
             <select
               value={data.defaultAccess}
               onChange={(e) => handleAccessChange(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--border-oat)] bg-white text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border-oat)] bg-[var(--input-bg)] text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
             >
               <option value="edit">Can edit</option>
               <option value="view">Can view</option>
@@ -208,13 +217,13 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-oat)] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
+                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-oat)] bg-[var(--input-bg)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
               />
               <div className="flex gap-2 w-full sm:w-auto">
                 <select
                   value={inviteAccess}
                   onChange={(e) => setInviteAccess(e.target.value as "edit" | "view")}
-                  className="flex-1 sm:flex-none px-2 py-2 rounded-lg border border-[var(--border-oat)] bg-white text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
+                  className="flex-1 sm:flex-none px-2 py-2 rounded-lg border border-[var(--border-oat)] bg-[var(--input-bg)] text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
                 >
                   <option value="edit">Edit</option>
                   <option value="view">View</option>
@@ -222,7 +231,7 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
                 <button
                   onClick={handleInvite}
                   disabled={sending || !inviteEmail.trim()}
-                  className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-white text-sm font-medium disabled:opacity-40 cursor-pointer hover:bg-[var(--color-warm-charcoal)] transition-colors"
+                  className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--on-foreground)] text-sm font-medium disabled:opacity-40 cursor-pointer hover:bg-[var(--color-warm-charcoal)] transition-colors"
                 >
                   {sending ? "..." : "Send"}
                 </button>
@@ -250,7 +259,7 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
           <div>
             {/* Owner */}
             <div className="flex items-center gap-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-[var(--foreground)] flex items-center justify-center text-white text-xs font-semibold shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--foreground)] flex items-center justify-center text-[var(--on-foreground)] text-xs font-semibold shrink-0">
                 {(data.owner.name ?? "O")[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -264,7 +273,7 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
             {data.members.map((m) => (
               <div key={m.id} className="flex items-center gap-3 py-2">
                 <div
-                  className="w-8 h-8 rounded-full bg-[var(--color-ube-800)] flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                  className="w-8 h-8 rounded-full bg-[var(--color-ube-800)] flex items-center justify-center text-[var(--on-accent)] text-xs font-semibold shrink-0"
                 >
                   {(m.user.name ?? "U")[0].toUpperCase()}
                 </div>

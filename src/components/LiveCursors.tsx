@@ -20,6 +20,7 @@ const CURSOR_COLORS = [
 export default function LiveCursors() {
   const others = useCanvasStore((s) => s.liveblocks.others);
   const camera = useCanvasStore((s) => s.camera);
+  const activePresenterId = useCanvasStore((s) => s.activePresenterId);
 
   if (!others || others.length === 0) return null;
 
@@ -76,7 +77,7 @@ export default function LiveCursors() {
                 fontWeight="600"
                 fontFamily="var(--font-sans), system-ui, sans-serif"
               >
-                {name}
+                {name}{other.id === activePresenterId ? " • Presenter" : ""}
               </text>
             </g>
           </g>

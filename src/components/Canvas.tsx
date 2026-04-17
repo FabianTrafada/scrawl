@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { getStroke } from "perfect-freehand";
+import polygonClipping from "polygon-clipping";
 import {
   useCanvasStore,
   type CanvasElement,
@@ -45,10 +46,7 @@ interface DragState {
   elementId: string;
   startX: number;
   startY: number;
-  elementStartX: number;
-  elementStartY: number;
-  elementStartX2?: number;
-  elementStartY2?: number;
+  elementStartMap: Record<string, { x: number; y: number; x2?: number; y2?: number }>;
 }
 
 interface ResizingState {
@@ -66,6 +64,13 @@ interface ResizingState {
 
 interface CanvasProps {
   roomId?: string;
+}
+
+interface LassoState {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
 }
 
 function getSvgPathFromStroke(stroke: number[][]): string {
@@ -86,16 +91,30 @@ function getSvgPathFromStroke(stroke: number[][]): string {
 
 export default function Canvas({ roomId }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const gridPatternId = useRef(`canvas-grid-${Math.random().toString(36).slice(2, 9)}`);
+  const dotPatternId = useRef(`canvas-dot-${Math.random().toString(36).slice(2, 9)}`);
 
   const elements = useCanvasStore((s) => s.elements);
   const activeTool = useCanvasStore((s) => s.activeTool);
   const selectedElementId = useCanvasStore((s) => s.selectedElementId);
+  const selectedElementIds = useCanvasStore((s) => s.selectedElementIds);
+  const activePresenterId = useCanvasStore((s) => s.activePresenterId);
   const camera = useCanvasStore((s) => s.camera);
   const strokeColor = useCanvasStore((s) => s.strokeColor);
   const fillColor = useCanvasStore((s) => s.fillColor);
   const strokeWidth = useCanvasStore((s) => s.strokeWidth);
+  const eraserSize = useCanvasStore((s) => s.eraserSize);
+  const pressurePenEnabled = useCanvasStore((s) => s.pressurePenEnabled);
+  const pressureEraserEnabled = useCanvasStore((s) => s.pressureEraserEnabled);
+  const snapEnabled = useCanvasStore((s) => s.snapEnabled);
+  const gridSize = useCanvasStore((s) => s.gridSize);
+  const canvasBackgroundMode = useCanvasStore((s) => s.canvasBackgroundMode);
+  const followPresenter = useCanvasStore((s) => s.followPresenter);
+  const filterQuery = useCanvasStore((s) => s.filterQuery);
+  const viewportSize = useCanvasStore((s) => s.viewportSize);
   const isReadOnly = useCanvasStore((s) => s.isReadOnly);
   const setSelectedElementId = useCanvasStore((s) => s.setSelectedElementId);
+  const setSelectedElementIds = useCanvasStore((s) => s.setSelectedElementIds);
   const setCursor = useCanvasStore((s) => s.setCursor);
   const addElement = useCanvasStore((s) => s.addElement);
   const updateElement = useCanvasStore((s) => s.updateElement);
@@ -104,18 +123,33 @@ export default function Canvas({ roomId }: CanvasProps) {
   const pauseHistory = useCanvasStore((s) => s.pauseHistory);
   const resumeHistory = useCanvasStore((s) => s.resumeHistory);
   const setCamera = useCanvasStore((s) => s.setCamera);
+  const setViewportSize = useCanvasStore((s) => s.setViewportSize);
+  const setActivePresenterId = useCanvasStore((s) => s.setActivePresenterId);
   const setActiveTool = useCanvasStore((s) => s.setActiveTool);
+  const focusElementRequest = useCanvasStore((s) => s.focusElementRequest);
+  const clearElementFocusRequest = useCanvasStore((s) => s.clearElementFocusRequest);
   const hydrateScene = useCanvasStore((s) => s.hydrateScene);
   const undo = useCanvasStore((s) => s.undo);
   const redo = useCanvasStore((s) => s.redo);
   const liveblocksRoom = useCanvasStore((s) => s.liveblocks.room);
   const isInRoom = !!liveblocksRoom;
+  const dedupedElements = useMemo(() => {
+    const seen = new Set<string>();
+    const result: CanvasElement[] = [];
+    for (const el of elements) {
+      if (seen.has(el.id)) continue;
+      seen.add(el.id);
+      result.push(el);
+    }
+    return result;
+  }, [elements]);
 
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
   const textEditorRef = useRef<TextEditorState | null>(null);
   const textCommitGuard = useRef(false);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [lasso, setLasso] = useState<LassoState | null>(null);
   const [resizing, setResizing] = useState<ResizingState | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
@@ -132,6 +166,16 @@ export default function Canvas({ roomId }: CanvasProps) {
     cameraY: number;
   } | null>(null);
   const wasPinching = useRef(false);
+
+  // Eraser session state (kept in refs so pointermove stays smooth)
+  const isErasingRef = useRef(false);
+  const lastEraserPointRef = useRef<Point | null>(null);
+  const pendingEraserSegmentRef = useRef<{
+    start: Point;
+    end: Point;
+    radius: number;
+  } | null>(null);
+  const eraserRafRef = useRef<number | null>(null);
 
   // Hydrate scene + image blobs on first mount (local mode only — Liveblocks handles sync in rooms)
   useEffect(() => {
@@ -183,6 +227,15 @@ export default function Canvas({ roomId }: CanvasProps) {
       objectUrlsRef.current.clear();
     };
   }, [hydrateScene, isInRoom]);
+
+  useEffect(
+    () => () => {
+      if (eraserRafRef.current !== null) {
+        cancelAnimationFrame(eraserRafRef.current);
+      }
+    },
+    []
+  );
 
   // Debounced autosave with legacy image migration (local mode only)
   useEffect(() => {
@@ -236,8 +289,16 @@ export default function Canvas({ roomId }: CanvasProps) {
 
   // Keyboard shortcuts
   useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select";
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (textEditor) return;
+      if (isEditableTarget(e.target)) return;
 
       if (e.key === " ") {
         e.preventDefault();
@@ -248,17 +309,38 @@ export default function Canvas({ roomId }: CanvasProps) {
       if (!e.ctrlKey && !e.metaKey) {
         switch (key) {
           case "v": setActiveTool("select"); break;
+          case "k": setActiveTool("lasso"); break;
           case "p": setActiveTool("pen"); break;
           case "r": setActiveTool("rectangle"); break;
           case "o": setActiveTool("ellipse"); break;
           case "l": setActiveTool("line"); break;
           case "a": setActiveTool("arrow"); break;
           case "t": setActiveTool("text"); break;
+          case "f":
+            {
+              const selfId =
+                (useCanvasStore.getState().liveblocks.room?.getSelf() as { id?: string } | null)
+                  ?.id ?? null;
+            setActivePresenterId(
+              activePresenterId ? null : selfId
+            );
+            }
+            break;
           case "delete":
           case "backspace":
-            if (selectedElementId) {
-              const selected = elements.find((el) => el.id === selectedElementId);
-              if (selected?.type === "image") {
+            {
+              const state = useCanvasStore.getState();
+              const idsToDelete =
+                state.selectedElementIds.length > 0
+                  ? state.selectedElementIds
+                  : state.selectedElementId
+                    ? [state.selectedElementId]
+                    : [];
+              if (idsToDelete.length === 0) break;
+
+              for (const id of idsToDelete) {
+                const selected = elements.find((el) => el.id === id);
+                if (selected?.type !== "image") continue;
                 const selectedImage = selected as import("@/store/canvasStore").ImageElement;
                 if (selectedImage.imageId) {
                   void deleteImageBlob(selectedImage.imageId);
@@ -268,8 +350,13 @@ export default function Canvas({ roomId }: CanvasProps) {
                   objectUrlsRef.current.delete(selectedImage.src);
                 }
               }
+
               pushToHistory();
-              deleteElement(selectedElementId);
+              for (const id of idsToDelete) {
+                deleteElement(id);
+              }
+              state.setSelectedElementId(null);
+              state.setSelectedElementIds([]);
             }
             break;
         }
@@ -280,6 +367,11 @@ export default function Canvas({ roomId }: CanvasProps) {
         if (e.shiftKey) redo();
         else undo();
       }
+
+      if ((e.ctrlKey || e.metaKey) && key === "k") {
+        e.preventDefault();
+        useCanvasStore.getState().setCommandPaletteOpen(true);
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -288,6 +380,7 @@ export default function Canvas({ roomId }: CanvasProps) {
 
     const handlePaste = (e: ClipboardEvent) => {
       if (textEditor) return;
+      if (isEditableTarget(e.target)) return;
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -394,7 +487,7 @@ export default function Canvas({ roomId }: CanvasProps) {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("paste", handlePaste);
     };
-  }, [textEditor, selectedElementId, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements, isInRoom, roomId]);
+  }, [textEditor, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements, isInRoom, roomId, activePresenterId, setActivePresenterId]);
 
   // Zoom and Pan with scroll/trackpad
   useEffect(() => {
@@ -429,8 +522,70 @@ export default function Canvas({ roomId }: CanvasProps) {
 
     const svg = svgRef.current;
     svg?.addEventListener("wheel", handleWheel, { passive: false });
-    return () => svg?.removeEventListener("wheel", handleWheel);
+
+    const handleWindowWheel = (e: WheelEvent) => {
+      // Only log zoom-like gestures; ignore normal scroll/pan spam.
+      if (!(e.ctrlKey || e.metaKey)) return;
+
+      const target = e.target as Element | null;
+      const withinCanvas = Boolean(
+        svgRef.current && target ? svgRef.current.contains(target) : false
+      );
+
+      // If the gesture happened over the SVG, the canvas listener already
+      // does `preventDefault()` and updates the camera.
+      if (withinCanvas) return;
+
+      // Prevent browser page zoom when the pointer is over the toolbar.
+      e.preventDefault();
+
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const delta = -e.deltaY * 0.01;
+      const zoomBefore = camera.zoom;
+      const newZoom = Math.min(Math.max(zoomBefore * (1 + delta), 0.1), 5);
+
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      setCamera({
+        zoom: newZoom,
+        x: mx - (mx - camera.x) * (newZoom / zoomBefore),
+        y: my - (my - camera.y) * (newZoom / zoomBefore),
+      });
+    };
+    window.addEventListener("wheel", handleWindowWheel, { passive: false });
+
+    return () => {
+      svg?.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("wheel", handleWindowWheel);
+    };
   }, [camera, setCamera]);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setViewportSize({ width: rect.width, height: rect.height });
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, [setViewportSize]);
+
+  useEffect(() => {
+    if (!followPresenter || !activePresenterId) return;
+    const presenter = useCanvasStore
+      .getState()
+      .liveblocks.others.find((other) => other.id === activePresenterId);
+    const presenterCamera = presenter?.presence?.camera as
+      | { x: number; y: number; zoom: number }
+      | undefined;
+    if (!presenterCamera) return;
+    setCamera(presenterCamera);
+  }, [followPresenter, activePresenterId, setCamera, elements.length]);
 
   const getCanvasPoint = useCallback(
     (e: React.PointerEvent): Point => {
@@ -442,6 +597,225 @@ export default function Canvas({ roomId }: CanvasProps) {
       );
     },
     [camera]
+  );
+
+  const maybeSnapPoint = useCallback(
+    (pt: Point): Point => {
+      if (!snapEnabled) return pt;
+      return {
+        x: Math.round(pt.x / gridSize) * gridSize,
+        y: Math.round(pt.y / gridSize) * gridSize,
+      };
+    },
+    [gridSize, snapEnabled]
+  );
+
+  const eraseAtSegment = useCallback((
+    startPt: Point,
+    endPt: Point,
+    radius: number
+  ): void => {
+    const r = Math.max(radius, 1);
+    const midPt: Point = { x: (startPt.x + endPt.x) / 2, y: (startPt.y + endPt.y) / 2 };
+    const eraserPolygon = eraserSegmentToRing(startPt, endPt, r);
+    if (!eraserPolygon) return;
+
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+    const dist2 = (ax: number, ay: number, bx: number, by: number) => {
+      const dx = ax - bx;
+      const dy = ay - by;
+      return dx * dx + dy * dy;
+    };
+
+    const circleIntersectsAABB = (center: Point, bounds: { x: number; y: number; w: number; h: number }) => {
+      const x0 = bounds.x;
+      const y0 = bounds.y;
+      const x1 = bounds.x + bounds.w;
+      const y1 = bounds.y + bounds.h;
+      const closestX = clamp(center.x, x0, x1);
+      const closestY = clamp(center.y, y0, y1);
+      return dist2(center.x, center.y, closestX, closestY) <= r * r;
+    };
+
+    const eraseLineOrArrow = (
+      el: import("@/store/canvasStore").LineElement | import("@/store/canvasStore").ArrowElement
+    ) => {
+      const ax = el.x;
+      const ay = el.y;
+      const bx = el.x2;
+      const by = el.y2;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return;
+
+      // Use the segment midpoint as a stable erase "center"
+      const cx = midPt.x;
+      const cy = midPt.y;
+      const tCenter = clamp(((cx - ax) * dx + (cy - ay) * dy) / len2, 0, 1);
+      const closestX = ax + dx * tCenter;
+      const closestY = ay + dy * tCenter;
+      const dist = Math.sqrt(dist2(cx, cy, closestX, closestY));
+      if (dist > r) return;
+
+      const len = Math.sqrt(len2);
+      const deltaT = Math.sqrt(Math.max(0, r * r - dist * dist)) / len;
+      const t0 = clamp(tCenter - deltaT, 0, 1);
+      const t1 = clamp(tCenter + deltaT, 0, 1);
+
+      // Fully erased
+      if (t0 <= 0 && t1 >= 1) {
+        deleteElement(el.id);
+        return;
+      }
+
+      const lenA = t0; // 0..t0
+      const lenB = 1 - t1; // t1..1
+      const MIN_LEN = 2;
+
+      if (lenA >= lenB) {
+        const nx1 = ax;
+        const ny1 = ay;
+        const nx2 = ax + dx * t0;
+        const ny2 = ay + dy * t0;
+        if (Math.hypot(nx2 - nx1, ny2 - ny1) < MIN_LEN) {
+          deleteElement(el.id);
+          return;
+        }
+        updateElement(el.id, { x: nx1, y: ny1, x2: nx2, y2: ny2 } as Partial<typeof el>);
+      } else {
+        const nx1 = ax + dx * t1;
+        const ny1 = ay + dy * t1;
+        const nx2 = bx;
+        const ny2 = by;
+        if (Math.hypot(nx2 - nx1, ny2 - ny1) < MIN_LEN) {
+          deleteElement(el.id);
+          return;
+        }
+        updateElement(el.id, { x: nx1, y: ny1, x2: nx2, y2: ny2 } as Partial<typeof el>);
+      }
+    };
+
+    for (const el of dedupedElements) {
+      switch (el.type) {
+        case "pen": {
+          const strokePolygon = el.outlinePoints
+            ? normalizeRing(el.outlinePoints)
+            : penPointsToRing(el.points, el.strokeWidth);
+          if (!strokePolygon) continue;
+
+          const [minX, minY, maxX, maxY] = getRingBounds(strokePolygon);
+          const segMinX = Math.min(startPt.x, endPt.x) - r;
+          const segMaxX = Math.max(startPt.x, endPt.x) + r;
+          const segMinY = Math.min(startPt.y, endPt.y) - r;
+          const segMaxY = Math.max(startPt.y, endPt.y) + r;
+          if (maxX < segMinX || minX > segMaxX || maxY < segMinY || minY > segMaxY) continue;
+
+          const diff = polygonClipping.difference(
+            [[[...strokePolygon]]],
+            [[[...eraserPolygon]]]
+          ) as number[][][][] | null;
+
+          const fragments = extractFragmentsFromDifference(diff);
+          const minArea = Math.max(12, r * 1.2);
+          const kept = fragments.filter((fragment) => polygonArea(fragment) >= minArea);
+
+          if (kept.length === 0) {
+            deleteElement(el.id);
+            continue;
+          }
+
+          if (kept.length === 1) {
+            const ring = simplifyRing(kept[0]);
+            const [ringMinX, ringMinY] = getRingBounds(ring);
+            updateElement(el.id, {
+              points: ring.map(([x, y]) => [x, y, 0.5]),
+              outlinePoints: ring,
+              pathData: ringToSvgPath(ring),
+              x: ringMinX,
+              y: ringMinY,
+            } as Partial<typeof el>);
+            } else {
+              deleteElement(el.id);
+              for (const fragment of kept) {
+                const ring = simplifyRing(fragment);
+                const [ringMinX, ringMinY] = getRingBounds(ring);
+                const nextPen: Omit<import("@/store/canvasStore").PenElement, "id"> = {
+                  type: "pen",
+                  x: ringMinX,
+                  y: ringMinY,
+                  strokeColor: el.strokeColor,
+                fillColor: el.fillColor,
+                strokeWidth: el.strokeWidth,
+                  opacity: el.opacity,
+                  points: ring.map(([x, y]) => [x, y, 0.5]),
+                  outlinePoints: ring,
+                  pathData: ringToSvgPath(ring),
+                };
+                addElement(nextPen);
+              }
+            }
+            continue;
+          }
+
+        case "rectangle":
+        case "ellipse": {
+          const bounds = getElementBounds(el);
+          const intersects =
+            circleIntersectsAABB(startPt, bounds) ||
+            circleIntersectsAABB(midPt, bounds) ||
+            circleIntersectsAABB(endPt, bounds);
+          if (intersects) deleteElement(el.id);
+          continue;
+        }
+
+        case "line":
+        case "arrow": {
+          eraseLineOrArrow(el);
+          continue;
+        }
+
+        case "text":
+        case "image": {
+          const bounds = getElementBounds(el);
+          const intersects =
+            circleIntersectsAABB(startPt, bounds) ||
+            circleIntersectsAABB(midPt, bounds) ||
+            circleIntersectsAABB(endPt, bounds);
+          if (intersects) deleteElement(el.id);
+          continue;
+        }
+      }
+    }
+  }, [dedupedElements, deleteElement, updateElement, addElement]);
+
+  const flushEraserSegment = useCallback(() => {
+    const segment = pendingEraserSegmentRef.current;
+    pendingEraserSegmentRef.current = null;
+    eraserRafRef.current = null;
+    if (!segment) return;
+    eraseAtSegment(segment.start, segment.end, segment.radius);
+  }, [eraseAtSegment]);
+
+  const queueEraserSegment = useCallback(
+    (start: Point, end: Point, radius: number) => {
+      const current = pendingEraserSegmentRef.current;
+      if (current) {
+        current.end = end;
+        current.radius = Math.max(current.radius, radius);
+      } else {
+        pendingEraserSegmentRef.current = {
+          start,
+          end,
+          radius,
+        };
+      }
+
+      if (eraserRafRef.current === null) {
+        eraserRafRef.current = requestAnimationFrame(flushEraserSegment);
+      }
+    },
+    [flushEraserSegment]
   );
 
   const handlePointerDown = useCallback(
@@ -487,10 +861,24 @@ export default function Canvas({ roomId }: CanvasProps) {
       // Read-only users can only pan and zoom
       if (isReadOnly) return;
 
-      const pt = getCanvasPoint(e);
+      const rawPt = getCanvasPoint(e);
+      const pt = maybeSnapPoint(rawPt);
 
       if (activeTool === "select") {
-        setSelectedElementId(null);
+        if (!e.shiftKey) {
+          setSelectedElementId(null);
+          setSelectedElementIds([]);
+        }
+        return;
+      }
+
+      if (activeTool === "lasso") {
+        setLasso({
+          startX: pt.x,
+          startY: pt.y,
+          currentX: pt.x,
+          currentY: pt.y,
+        });
         return;
       }
 
@@ -527,6 +915,28 @@ export default function Canvas({ roomId }: CanvasProps) {
         return;
       }
 
+      if (activeTool === "eraser") {
+        // Start erasing: we update elements during pointermove and batch undo via pause/resume.
+        pauseHistory();
+        setSelectedElementId(null);
+        setDrawing(null);
+        setDragging(null);
+        setResizing(null);
+        setIsPanning(false);
+        setPanStart(null);
+
+        isErasingRef.current = true;
+
+        (e.target as Element)?.setPointerCapture?.(e.pointerId);
+
+        lastEraserPointRef.current = pt;
+        const eraserRadius = pressureEraserEnabled
+          ? Math.max(2, eraserSize * Math.max(e.pressure || 0.5, 0.2))
+          : eraserSize;
+        queueEraserSegment(pt, pt, eraserRadius);
+        return;
+      }
+
       // Drawing tools
       if (
         activeTool === "pen" ||
@@ -544,11 +954,11 @@ export default function Canvas({ roomId }: CanvasProps) {
           startY: pt.y,
           currentX: pt.x,
           currentY: pt.y,
-          points: [[pt.x, pt.y, e.pressure || 0.5]],
+          points: [[pt.x, pt.y, pressurePenEnabled ? e.pressure || 0.5 : 0.5]],
         });
       }
     },
-    [activeTool, getCanvasPoint, spaceHeld, setSelectedElementId, isReadOnly, pauseHistory]
+    [activeTool, getCanvasPoint, maybeSnapPoint, spaceHeld, setSelectedElementId, setSelectedElementIds, isReadOnly, pauseHistory, eraserSize, pressureEraserEnabled, pressurePenEnabled, queueEraserSegment]
   );
 
   const handlePointerMove = useCallback(
@@ -588,6 +998,32 @@ export default function Canvas({ roomId }: CanvasProps) {
             y: zY + panY,
           });
         }
+        return;
+      }
+
+      // Continuous eraser updates
+      if (isErasingRef.current && activeTool === "eraser") {
+        const pt = maybeSnapPoint(getCanvasPoint(e));
+        const last = lastEraserPointRef.current ?? pt;
+        const eraserRadius = pressureEraserEnabled
+          ? Math.max(2, eraserSize * Math.max(e.pressure || 0.5, 0.2))
+          : eraserSize;
+        const segmentLen = Math.hypot(pt.x - last.x, pt.y - last.y);
+        if (segmentLen < Math.max(0.5, eraserRadius * 0.08)) {
+          return;
+        }
+        queueEraserSegment(last, pt, eraserRadius);
+        lastEraserPointRef.current = pt;
+        return;
+      }
+
+      if (lasso) {
+        const pt = maybeSnapPoint(getCanvasPoint(e));
+        setLasso({
+          ...lasso,
+          currentX: pt.x,
+          currentY: pt.y,
+        });
         return;
       }
 
@@ -658,32 +1094,31 @@ export default function Canvas({ roomId }: CanvasProps) {
       }
 
       if (dragging) {
-        const pt = getCanvasPoint(e);
+        const pt = maybeSnapPoint(getCanvasPoint(e));
         const dx = pt.x - dragging.startX;
         const dy = pt.y - dragging.startY;
-
-        const updates: Record<string, number> = {
-          x: dragging.elementStartX + dx,
-          y: dragging.elementStartY + dy,
-        };
-
-        if (dragging.elementStartX2 !== undefined && dragging.elementStartY2 !== undefined) {
-          updates.x2 = dragging.elementStartX2 + dx;
-          updates.y2 = dragging.elementStartY2 + dy;
+        for (const [id, start] of Object.entries(dragging.elementStartMap)) {
+          const updates: Record<string, number> = {
+            x: start.x + dx,
+            y: start.y + dy,
+          };
+          if (start.x2 !== undefined && start.y2 !== undefined) {
+            updates.x2 = start.x2 + dx;
+            updates.y2 = start.y2 + dy;
+          }
+          updateElement(id, updates);
         }
-
-        updateElement(dragging.elementId, updates);
         return;
       }
 
       if (!drawing) return;
 
-      const pt = getCanvasPoint(e);
+      const pt = maybeSnapPoint(getCanvasPoint(e));
 
       if (drawing.type === "pen") {
         setDrawing({
           ...drawing,
-          points: [...drawing.points, [pt.x, pt.y, e.pressure || 0.5]],
+          points: [...drawing.points, [pt.x, pt.y, pressurePenEnabled ? e.pressure || 0.5 : 0.5]],
           currentX: pt.x,
           currentY: pt.y,
         });
@@ -695,7 +1130,7 @@ export default function Canvas({ roomId }: CanvasProps) {
         });
       }
     },
-    [isPanning, panStart, resizing, dragging, drawing, camera, getCanvasPoint, setCamera, updateElement, elements, isInRoom, setCursor]
+    [isPanning, panStart, resizing, dragging, drawing, camera, getCanvasPoint, maybeSnapPoint, setCamera, updateElement, isInRoom, setCursor, isErasingRef, activeTool, eraserSize, pressureEraserEnabled, lasso, pressurePenEnabled, queueEraserSegment]
   );
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
@@ -710,9 +1145,44 @@ export default function Canvas({ roomId }: CanvasProps) {
       return;
     }
 
+    if (isErasingRef.current) {
+      // Finish eraser gesture and create a single undo step.
+      isErasingRef.current = false;
+      if (eraserRafRef.current !== null) {
+        cancelAnimationFrame(eraserRafRef.current);
+        eraserRafRef.current = null;
+      }
+      if (pendingEraserSegmentRef.current) {
+        const segment = pendingEraserSegmentRef.current;
+        pendingEraserSegmentRef.current = null;
+        eraseAtSegment(segment.start, segment.end, segment.radius);
+      }
+      lastEraserPointRef.current = null;
+      pushToHistory();
+      resumeHistory();
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setPanStart(null);
+      return;
+    }
+
+    if (lasso) {
+      const x = Math.min(lasso.startX, lasso.currentX);
+      const y = Math.min(lasso.startY, lasso.currentY);
+      const w = Math.abs(lasso.currentX - lasso.startX);
+      const h = Math.abs(lasso.currentY - lasso.startY);
+      const ids = elements
+        .filter((el) => !el.hidden)
+        .filter((el) => {
+          const b = getElementBounds(el);
+          return b.x + b.w >= x && b.x <= x + w && b.y + b.h >= y && b.y <= y + h;
+        })
+        .map((el) => el.id);
+      setSelectedElementIds(ids);
+      setLasso(null);
       return;
     }
 
@@ -797,12 +1267,15 @@ export default function Canvas({ roomId }: CanvasProps) {
     // Resume Liveblocks history batching so the entire stroke is one undo step
     resumeHistory();
     setDrawing(null);
-  }, [drawing, dragging, resizing, isPanning, addElement, pushToHistory, resumeHistory, strokeColor, fillColor, strokeWidth]);
+  }, [drawing, dragging, resizing, isPanning, lasso, elements, addElement, pushToHistory, resumeHistory, strokeColor, fillColor, strokeWidth, setSelectedElementIds, eraseAtSegment]);
 
   const handleElementSelect = useCallback(
     (id: string) => {
       setActiveTool("select");
-      setSelectedElementId(id);
+      const currentIds = useCanvasStore.getState().selectedElementIds;
+      const nextIds = currentIds.includes(id) ? currentIds : [id];
+      setSelectedElementIds(nextIds);
+      setSelectedElementId(nextIds.length === 1 ? nextIds[0] : null);
 
       const el = elements.find((e) => e.id === id);
       if (!el) return;
@@ -819,14 +1292,25 @@ export default function Canvas({ roomId }: CanvasProps) {
 
         if (!dragStarted.current) {
           dragStarted.current = true;
+          const selection = nextIds
+            .map((selectedId) => elements.find((item) => item.id === selectedId))
+            .filter((item): item is CanvasElement => Boolean(item && !item.locked));
+          const elementStartMap = Object.fromEntries(
+            selection.map((item) => [
+              item.id,
+              {
+                x: item.x,
+                y: item.y,
+                x2: (item as { x2?: number }).x2,
+                y2: (item as { y2?: number }).y2,
+              },
+            ])
+          );
           setDragging({
             elementId: id,
             startX: pt.x,
             startY: pt.y,
-            elementStartX: el.x,
-            elementStartY: el.y,
-            elementStartX2: (el as { x2?: number }).x2,
-            elementStartY2: (el as { y2?: number }).y2,
+            elementStartMap,
           });
         }
         // Subsequent moves are handled by Canvas handlePointerMove via dragging state
@@ -840,7 +1324,7 @@ export default function Canvas({ roomId }: CanvasProps) {
       window.addEventListener("pointermove", handleMove);
       window.addEventListener("pointerup", handleUp, { once: true });
     },
-    [elements, camera, setSelectedElementId, setActiveTool]
+    [elements, camera, setSelectedElementId, setSelectedElementIds, setActiveTool]
   );
 
   const handleTextDoubleClick = useCallback(
@@ -956,6 +1440,15 @@ export default function Canvas({ roomId }: CanvasProps) {
   const renderDrawingPreview = () => {
     if (!drawing) return null;
 
+    const DEFAULT_STROKE = "#1e1e1e";
+    const isDefaultStrokeColor =
+      strokeColor?.toLowerCase() === DEFAULT_STROKE.toLowerCase();
+
+    const effectiveStroke = isDefaultStrokeColor
+      ? "var(--tool-default-stroke)"
+      : strokeColor;
+    const glow = isDefaultStrokeColor ? "var(--tool-default-stroke-glow)" : undefined;
+
     if (drawing.type === "pen" && drawing.points.length > 0) {
       const stroke = getStroke(drawing.points, {
         size: 8,
@@ -965,7 +1458,14 @@ export default function Canvas({ roomId }: CanvasProps) {
         simulatePressure: true,
       });
       const pathData = getSvgPathFromStroke(stroke);
-      return <path d={pathData} fill={strokeColor} stroke="none" />;
+      return (
+        <path
+          d={pathData}
+          fill={effectiveStroke}
+          stroke="none"
+          style={{ filter: glow }}
+        />
+      );
     }
 
     if (drawing.type === "rectangle") {
@@ -976,8 +1476,9 @@ export default function Canvas({ roomId }: CanvasProps) {
       return (
         <rect
           x={x} y={y} width={w} height={h}
-          fill="none" stroke={strokeColor} strokeWidth={strokeWidth}
+          fill="none" stroke={effectiveStroke} strokeWidth={strokeWidth}
           strokeDasharray="6,3" opacity={0.6}
+          style={{ filter: glow }}
         />
       );
     }
@@ -990,8 +1491,9 @@ export default function Canvas({ roomId }: CanvasProps) {
       return (
         <ellipse
           cx={cx} cy={cy} rx={rx} ry={ry}
-          fill="none" stroke={strokeColor} strokeWidth={strokeWidth}
+          fill="none" stroke={effectiveStroke} strokeWidth={strokeWidth}
           strokeDasharray="6,3" opacity={0.6}
+          style={{ filter: glow }}
         />
       );
     }
@@ -1001,8 +1503,9 @@ export default function Canvas({ roomId }: CanvasProps) {
         <line
           x1={drawing.startX} y1={drawing.startY}
           x2={drawing.currentX} y2={drawing.currentY}
-          stroke={strokeColor} strokeWidth={strokeWidth}
+          stroke={effectiveStroke} strokeWidth={strokeWidth}
           strokeDasharray="6,3" opacity={0.6}
+          style={{ filter: glow }}
         />
       );
     }
@@ -1014,11 +1517,16 @@ export default function Canvas({ roomId }: CanvasProps) {
     ? (isPanning ? "grabbing" : "grab")
     : activeTool === "select"
     ? "default"
+    : activeTool === "lasso"
+    ? "cell"
     : activeTool === "text"
     ? "text"
     : "crosshair";
 
-  const contentBounds = useMemo(() => getContentBounds(elements), [elements]);
+  const contentBounds = useMemo(
+    () => getContentBounds(dedupedElements),
+    [dedupedElements]
+  );
 
   const shouldShowBackToContent = useMemo(() => {
     if (!contentBounds || !svgRef.current) return false;
@@ -1061,6 +1569,50 @@ export default function Canvas({ roomId }: CanvasProps) {
     setSelectedElementId(null);
   }, [contentBounds, setCamera, setSelectedElementId]);
 
+  useEffect(() => {
+    if (!focusElementRequest) return;
+    const target = dedupedElements.find((item) => item.id === focusElementRequest.elementId);
+    if (!target || !svgRef.current) {
+      clearElementFocusRequest();
+      return;
+    }
+
+    const rect = svgRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      clearElementFocusRequest();
+      return;
+    }
+
+    const bounds = getElementBounds(target);
+    const centerX = bounds.x + bounds.w / 2;
+    const centerY = bounds.y + bounds.h / 2;
+    const targetZoom = Math.min(
+      3,
+      Math.max(
+        0.3,
+        Math.min(rect.width / Math.max(bounds.w + 120, 1), rect.height / Math.max(bounds.h + 120, 1))
+      )
+    );
+
+    setCamera({
+      zoom: targetZoom,
+      x: rect.width / 2 - centerX * targetZoom,
+      y: rect.height / 2 - centerY * targetZoom,
+    });
+    setActiveTool("select");
+    setSelectedElementIds([target.id]);
+    setSelectedElementId(target.id);
+    clearElementFocusRequest();
+  }, [
+    clearElementFocusRequest,
+    dedupedElements,
+    focusElementRequest,
+    setActiveTool,
+    setCamera,
+    setSelectedElementId,
+    setSelectedElementIds,
+  ]);
+
   return (
     <div className="w-full h-full relative overflow-hidden bg-transparent">
       {/* Grid background */}
@@ -1077,19 +1629,72 @@ export default function Canvas({ roomId }: CanvasProps) {
           <filter id="selection-glow">
             <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="var(--color-slushie-500)" floodOpacity="0.6" />
           </filter>
+          {canvasBackgroundMode === "grid" && (
+            <pattern
+              id={gridPatternId.current}
+              width={gridSize}
+              height={gridSize}
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d={`M ${gridSize} 0 L 0 0 0 ${gridSize}`}
+                fill="none"
+                stroke="var(--border-oat)"
+                strokeWidth="1"
+                opacity="0.28"
+              />
+            </pattern>
+          )}
+          {canvasBackgroundMode === "dot" && (
+            <pattern
+              id={dotPatternId.current}
+              width={gridSize}
+              height={gridSize}
+              patternUnits="userSpaceOnUse"
+            >
+              <circle
+                cx={gridSize / 2}
+                cy={gridSize / 2}
+                r="1"
+                fill="var(--border-oat)"
+                opacity="0.4"
+              />
+            </pattern>
+          )}
         </defs>
 
-        <rect width="100%" height="100%" fill="transparent" />
+        <rect
+          width="100%"
+          height="100%"
+          fill={
+            canvasBackgroundMode === "grid"
+              ? `url(#${gridPatternId.current})`
+              : canvasBackgroundMode === "dot"
+                ? `url(#${dotPatternId.current})`
+                : "transparent"
+          }
+        />
 
         <g transform={`translate(${camera.x},${camera.y}) scale(${camera.zoom})`}>
-          {elements.map((el) => {
+          {[...dedupedElements]
+            .filter((el) => !el.hidden)
+            .filter((el) => {
+              if (!filterQuery.trim()) return true;
+              const q = filterQuery.toLowerCase();
+              const haystack = `${el.label ?? ""} ${(el.tags ?? []).join(" ")} ${
+                el.type === "text" ? el.content : ""
+              }`.toLowerCase();
+              return haystack.includes(q);
+            })
+            .sort((a, b) => (a.layerIndex ?? 0) - (b.layerIndex ?? 0))
+            .map((el) => {
             switch (el.type) {
               case "pen":
                 return (
                   <PenElement
                     key={el.id}
                     element={el}
-                    isSelected={el.id === selectedElementId}
+                    isSelected={selectedElementIds.includes(el.id) || el.id === selectedElementId}
                     onSelect={handleElementSelect}
                   />
                 );
@@ -1101,7 +1706,7 @@ export default function Canvas({ roomId }: CanvasProps) {
                   <ShapeElement
                     key={el.id}
                     element={el}
-                    isSelected={el.id === selectedElementId}
+                    isSelected={selectedElementIds.includes(el.id) || el.id === selectedElementId}
                     onSelect={handleElementSelect}
                   />
                 );
@@ -1110,7 +1715,7 @@ export default function Canvas({ roomId }: CanvasProps) {
                   <TextElementRenderer
                     key={el.id}
                     element={el}
-                    isSelected={el.id === selectedElementId}
+                    isSelected={selectedElementIds.includes(el.id) || el.id === selectedElementId}
                     onSelect={handleElementSelect}
                     onDoubleClick={handleTextDoubleClick}
                     onResize={handleTextResize}
@@ -1121,7 +1726,7 @@ export default function Canvas({ roomId }: CanvasProps) {
                   <ImageElementRenderer
                     key={el.id}
                     element={el}
-                    isSelected={el.id === selectedElementId}
+                    isSelected={selectedElementIds.includes(el.id) || el.id === selectedElementId}
                     onSelect={handleElementSelect}
                   />
                 );
@@ -1132,9 +1737,21 @@ export default function Canvas({ roomId }: CanvasProps) {
 
           {renderDrawingPreview()}
 
+          {lasso && (
+            <rect
+              x={Math.min(lasso.startX, lasso.currentX)}
+              y={Math.min(lasso.startY, lasso.currentY)}
+              width={Math.abs(lasso.currentX - lasso.startX)}
+              height={Math.abs(lasso.currentY - lasso.startY)}
+              fill="rgba(59,211,253,0.12)"
+              stroke="var(--color-slushie-500)"
+              strokeDasharray="6,4"
+            />
+          )}
+
           {/* Resize handles for selected element */}
           {selectedElementId && (() => {
-            const sel = elements.find((e) => e.id === selectedElementId);
+            const sel = dedupedElements.find((e) => e.id === selectedElementId);
             if (!sel || sel.type === "pen") return null;
 
             if (sel.type === "line" || sel.type === "arrow") {
@@ -1181,9 +1798,9 @@ export default function Canvas({ roomId }: CanvasProps) {
         <button
           type="button"
           onClick={handleBackToContent}
-          className="fixed left-1/2 -translate-x-1/2 top-4 sm:top-auto sm:bottom-6 z-50 group flex items-center gap-2 rounded-[999px] border border-[var(--border-oat)] bg-white/90 backdrop-blur-md px-4 py-2.5 text-sm font-medium text-[var(--color-warm-charcoal)] tracking-wide shadow-[rgba(0,0,0,0.1)_0px_1px_1px,rgba(0,0,0,0.04)_0px_-1px_1px_inset,rgba(0,0,0,0.05)_0px_-0.5px_1px] hover:bg-[var(--color-slushie-500)] hover:text-white hover:-translate-y-0.5 hover:shadow-[-7px_7px_0px_0px_#000] active:translate-y-0 active:shadow-none transition-all duration-200"
+          className="fixed left-1/2 -translate-x-1/2 top-4 sm:top-auto sm:bottom-6 z-50 group flex items-center gap-2 rounded-[999px] border border-[var(--border-oat)] bg-[var(--surface-overlay)] backdrop-blur-md px-4 py-2.5 text-sm font-medium text-[var(--foreground)] tracking-wide shadow-[rgba(0,0,0,0.1)_0px_1px_1px,rgba(0,0,0,0.04)_0px_-1px_1px_inset,rgba(0,0,0,0.05)_0px_-0.5px_1px] hover:bg-[var(--color-slushie-500)] hover:text-white hover:-translate-y-0.5 hover:shadow-[-7px_7px_0px_0px_#000] active:translate-y-0 active:shadow-none transition-all duration-200"
         >
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-[var(--border-oat)] bg-[var(--background)] group-hover:border-white/60 group-hover:bg-white/15">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-[var(--border-oat)] bg-[var(--background)] group-hover:border-[var(--surface-overlay-hover-border)] group-hover:bg-[var(--surface-overlay-hover-weak)]">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="15 18 9 12 15 6" />
             </svg>
@@ -1257,4 +1874,119 @@ function getContentBounds(elements: CanvasElement[]): { x: number; y: number; w:
   }
 
   return { x: minX, y: minY, w: Math.max(maxX - minX, 1), h: Math.max(maxY - minY, 1) };
+}
+
+type Ring = [number, number][];
+
+function ringToSvgPath(ring: Ring): string {
+  if (ring.length < 3) return "";
+  const normalized = normalizeRing(ring);
+  if (!normalized) return "";
+  return `M ${normalized.map(([x, y]) => `${x} ${y}`).join(" L ")} Z`;
+}
+
+function normalizeRing(ring: number[][]): Ring | null {
+  if (ring.length < 3) return null;
+  const normalized = ring.map(([x, y]) => [x, y] as [number, number]);
+  const first = normalized[0];
+  const last = normalized[normalized.length - 1];
+  if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.001) {
+    normalized.pop();
+  }
+  return normalized.length >= 3 ? normalized : null;
+}
+
+function simplifyRing(ring: Ring, maxPoints = 180): Ring {
+  if (ring.length <= maxPoints) return ring;
+  const step = Math.ceil(ring.length / maxPoints);
+  const simplified: Ring = [];
+  for (let i = 0; i < ring.length; i += step) {
+    simplified.push(ring[i]);
+  }
+  // Preserve closure continuity with final point sample.
+  if (simplified.length < 3) {
+    return ring.slice(0, 3) as Ring;
+  }
+  return simplified;
+}
+
+function penPointsToRing(points: number[][], strokeWidth: number): Ring | null {
+  if (points.length < 2) return null;
+  const outline = getStroke(points, {
+    size: Math.max(4, strokeWidth * 2),
+    thinning: 0.5,
+    smoothing: 0.5,
+    streamline: 0.5,
+    simulatePressure: true,
+    last: true,
+  });
+  return normalizeRing(outline as number[][]);
+}
+
+function eraserSegmentToRing(startPt: Point, endPt: Point, radius: number): Ring | null {
+  const eraserPoints = [
+    [startPt.x, startPt.y, 0.5],
+    [endPt.x, endPt.y, 0.5],
+  ];
+  const outline = getStroke(eraserPoints, {
+    size: Math.max(2, radius * 2),
+    thinning: 0,
+    smoothing: 0.7,
+    streamline: 0,
+    simulatePressure: false,
+    last: true,
+  });
+  return normalizeRing(outline as number[][]);
+}
+
+function extractFragmentsFromDifference(
+  diff: number[][][][] | null
+): Ring[] {
+  if (!diff?.length) return [];
+
+  const fragments: Ring[] = [];
+  for (const polygon of diff) {
+    if (!polygon.length) continue;
+    let bestRing: Ring | null = null;
+    let maxArea = 0;
+    for (const ring of polygon) {
+      const normalized = normalizeRing(ring);
+      if (!normalized) continue;
+      const area = polygonArea(normalized);
+      if (area > maxArea) {
+        maxArea = area;
+        bestRing = normalized;
+      }
+    }
+    if (bestRing && maxArea > 0.5) fragments.push(bestRing);
+  }
+
+  return fragments;
+}
+
+function polygonArea(ring: Ring): number {
+  if (ring.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[(i + 1) % ring.length];
+    area += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(area / 2);
+}
+
+function getRingBounds(ring: Ring): [number, number, number, number] {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  return [minX, minY, maxX, maxY];
 }

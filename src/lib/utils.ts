@@ -1,5 +1,14 @@
+let fallbackIdCounter = 0;
+
 export function generateId(): string {
-  return Math.random().toString(36).slice(2, 11);
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  fallbackIdCounter += 1;
+  return `id-${Date.now().toString(36)}-${fallbackIdCounter.toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
 }
 
 export function clamp(value: number, min: number, max: number): number {

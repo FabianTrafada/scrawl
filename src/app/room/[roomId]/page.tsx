@@ -7,6 +7,11 @@ import { toast } from "sonner";
 import RoomProvider from "@/components/RoomProvider";
 import Toolbar from "@/components/Toolbar";
 import LatexCheatsheet from "@/components/LatexCheatsheet";
+import LayersPanel from "@/components/LayersPanel";
+import CommandPalette from "@/components/CommandPalette";
+import CommentsPanel from "@/components/CommentsPanel";
+import MobileQuickDrawer from "@/components/MobileQuickDrawer";
+import CheckpointsDialog from "@/components/CheckpointsDialog";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const LiveCursors = dynamic(() => import("@/components/LiveCursors"), {
@@ -60,8 +65,13 @@ export default function RoomPage({ params }: RoomPageProps) {
         <Canvas roomId={roomId} />
         <LiveCursors />
         <Toolbar />
+        <MobileQuickDrawer roomId={roomId} />
+        <LayersPanel />
+        <CommentsPanel roomId={roomId} />
+        <CommandPalette />
+        <CheckpointsDialog roomId={roomId} />
         <LatexCheatsheet />
-        <footer className="hidden sm:block fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
+        <footer className="cookie-aware-footer hidden sm:block fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
           <span className="font-semibold text-[var(--color-warm-charcoal)]">
             Scrawl
           </span>

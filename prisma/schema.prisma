@@ -20,6 +20,8 @@ model User {
   accounts    Account[]
   rooms       Room[]         @relation("RoomOwner")
   memberships RoomMember[]
+  comments    RoomComment[]  @relation("RoomCommentAuthor")
+  checkpoints RoomCheckpoint[] @relation("RoomCheckpointAuthor")
 }
 
 model Session {
@@ -70,11 +72,33 @@ model Room {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  owner   User         @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members RoomMember[]
-  invites RoomInvite[]
+  owner            User                  @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members          RoomMember[]
+  invites          RoomInvite[]
+  comments         RoomComment[]
+  checkpoints      RoomCheckpoint[]
+  presenceSnapshot RoomPresenceSnapshot?
 
   @@index([ownerId])
+}
+
+model RoomComment {
+  id        String   @id @default(cuid())
+  roomId    String
+  authorId  String
+  elementId String?
+  x         Float?
+  y         Float?
+  text      String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  room   Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author User @relation("RoomCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([authorId])
 }
 
 model RoomMember {
@@ -104,4 +128,28 @@ model RoomInvite {
 
   @@index([roomId])
   @@index([email])
+}
+
+model RoomCheckpoint {
+  id        String   @id @default(cuid())
+  roomId    String
+  authorId  String
+  name      String
+  snapshot  Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  room   Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author User @relation("RoomCheckpointAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([authorId])
+}
+
+model RoomPresenceSnapshot {
+  roomId      String   @id
+  onlineCount Int
+  sampledAt   DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }

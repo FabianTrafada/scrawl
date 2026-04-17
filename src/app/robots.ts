@@ -8,6 +8,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
       },
     ],
-    sitemap: "https://scrawl-lovat.vercel.app/sitemap.xml",
+    host: "https://scrawl.site",
+    sitemap: "https://scrawl.site/sitemap.xml",
   };
 }

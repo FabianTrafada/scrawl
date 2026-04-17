@@ -10,6 +10,7 @@ import Script from "next/script";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { PresenceSource, RoomActivity } from "@/types/collab";
 
 function ErrorToaster() {
   const searchParams = useSearchParams();
@@ -79,6 +80,7 @@ interface RoomItem {
   name: string;
   updatedAt: string;
   _count: { members: number };
+  activity?: RoomActivity;
 }
 
 export default function Home() {
@@ -88,6 +90,7 @@ export default function Home() {
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [pollingMs, setPollingMs] = useState(50_000);
 
   const fetchRooms = useCallback(async () => {
     setLoadingRooms(true);
@@ -96,6 +99,9 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setRooms(data.rooms ?? []);
+        if (typeof data?.polling?.recommendedMs === "number") {
+          setPollingMs(Math.max(15_000, data.polling.recommendedMs));
+        }
       }
     } finally {
       setLoadingRooms(false);
@@ -107,6 +113,31 @@ export default function Home() {
       fetchRooms();
     }
   }, [showDashboard, session, fetchRooms]);
+
+  useEffect(() => {
+    if (!showDashboard || !session?.user) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    const interval = window.setInterval(() => {
+      void fetchRooms();
+      const roomIds = rooms.slice(0, 10).map((room) => room.id);
+      if (roomIds.length > 0) {
+        void fetch("/api/rooms/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomIds }),
+        });
+      }
+    }, pollingMs);
+
+    return () => window.clearInterval(interval);
+  }, [fetchRooms, pollingMs, rooms, session?.user, showDashboard]);
+
+const onlineCountLabel = (count: number | null, source: PresenceSource | undefined) => {
+    if (count === null || count === undefined) return "--";
+    if (source === "stale") return `${count} (stale)`;
+    return `${count}`;
+};
 
   const handleCreateRoom = async () => {
     setCreating(true);
@@ -185,7 +216,7 @@ export default function Home() {
               onClick={() => setShowDashboard(false)}
             />
             <div 
-              className="relative w-full max-w-md mx-4 clay-card max-h-[80vh] overflow-hidden flex flex-col bg-white rounded-3xl"
+              className="relative w-full max-w-md mx-4 clay-card max-h-[80vh] overflow-hidden flex flex-col bg-[var(--surface)] rounded-3xl"
               style={{ minHeight: "460px" }}
             >
               {/* Header */}
@@ -210,7 +241,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setShowDashboard(false)}
-                    className="w-10 h-10 sm:w-12 sm:h-12 flex shrink-0 items-center justify-center rounded-xl hover:bg-white border border-transparent hover:border-[var(--border-oat)] hover:shadow-sm transition-all cursor-pointer text-[var(--color-warm-charcoal)]"
+                    className="w-10 h-10 sm:w-12 sm:h-12 flex shrink-0 items-center justify-center rounded-xl hover:bg-[var(--surface)] border border-transparent hover:border-[var(--border-oat)] hover:shadow-sm transition-all cursor-pointer text-[var(--color-warm-charcoal)]"
                     aria-label="Close"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-5 h-5">
@@ -221,13 +252,13 @@ export default function Home() {
               </div>
 
               {/* Room list */}
-              <div className="flex-1 overflow-y-auto p-8 bg-white flex flex-col">
+              <div className="flex-1 overflow-y-auto p-8 bg-[var(--surface)] flex flex-col">
                 {!session?.user && (
                   <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[var(--color-ube-800)] rounded-2xl border border-[var(--border-oat)] relative overflow-hidden shadow-[rgba(0,0,0,0.1)_0px_1px_1px,rgba(0,0,0,0.04)_0px_-1px_1px_inset]">
                     <div className="absolute -top-12 -right-12 w-40 h-40 bg-[var(--color-lemon-500)] rounded-full mix-blend-multiply opacity-80 blur-xl"></div>
                     <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-[var(--color-pomegranate-400)] rounded-full mix-blend-multiply opacity-80 blur-xl"></div>
                     <div className="relative z-10 flex flex-col items-center">
-                      <div className="w-12 h-12 mb-4 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
+                      <div className="w-12 h-12 mb-4 bg-[var(--surface-overlay-hover-weak)] rounded-full flex items-center justify-center backdrop-blur-sm border border-[var(--surface-overlay-hover-border)]">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                           <circle cx="9" cy="7" r="4"></circle>
@@ -244,7 +275,7 @@ export default function Home() {
                 {session?.user && loadingRooms && (
                   <div className="flex-1 flex flex-col gap-3">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="w-full p-5 rounded-2xl border border-[var(--border-oat)] bg-white mb-3">
+                      <div key={i} className="w-full p-5 rounded-2xl border border-[var(--border-oat)] bg-[var(--surface)] mb-3">
                         <div className="flex items-start justify-between mb-2">
                           <Skeleton className="h-5 w-1/3" />
                           <Skeleton className="h-5 w-16 rounded-md" />
@@ -260,7 +291,7 @@ export default function Home() {
 
                 {session?.user && !loadingRooms && rooms.length === 0 && (
                   <div className="flex-1 flex flex-col items-center justify-center text-center py-12 px-6 bg-[var(--background)] rounded-2xl border border-dashed border-[var(--border-oat)]">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-white rounded-full flex items-center justify-center border border-[var(--border-oat)] shadow-sm">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-[var(--surface)] rounded-full flex items-center justify-center border border-[var(--border-oat)] shadow-sm">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-warm-silver)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                         <circle cx="8.5" cy="8.5" r="1.5" />
@@ -279,17 +310,17 @@ export default function Home() {
                       router.push(`/room/${room.id}`);
                       setShowDashboard(false);
                     }}
-                    className="w-full text-left p-5 rounded-2xl border border-[var(--border-oat)] bg-white hover:bg-[var(--background)] cursor-pointer transition-all duration-200 mb-3 group hover:-translate-y-0.5 hover:shadow-[rgba(0,0,0,0.1)_0px_4px_12px]"
+                    className="w-full text-left p-5 rounded-2xl border border-[var(--border-oat)] bg-[var(--surface)] hover:bg-[var(--background)] cursor-pointer transition-all duration-200 mb-3 group hover:-translate-y-0.5 hover:shadow-[rgba(0,0,0,0.1)_0px_4px_12px]"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="text-[18px] font-semibold text-[var(--foreground)] group-hover:text-[var(--color-blueberry-800)] transition-colors leading-tight">
                         {room.name}
                       </h3>
-                      <span className="text-[13px] font-medium text-[var(--color-warm-silver)] bg-white px-2 py-0.5 rounded-md border border-[var(--border-oat-light)]">
+                      <span className="text-[13px] font-medium text-[var(--color-warm-silver)] bg-[var(--surface)] px-2 py-0.5 rounded-md border border-[var(--border-oat-light)]">
                         {formatDate(room.updatedAt)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-3">
+                    <div className="flex flex-wrap items-center gap-3 mt-3">
                       <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-warm-charcoal)]">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -298,6 +329,19 @@ export default function Home() {
                           <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
                         {room._count.members} member{room._count.members !== 1 ? "s" : ""}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-warm-charcoal)]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        Online {onlineCountLabel(room.activity?.onlineCount ?? null, room.activity?.onlineCountSource)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-warm-charcoal)]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        Open comments {room.activity?.unresolvedComments ?? 0}
                       </span>
                       <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-warm-silver)]">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -327,7 +371,7 @@ export default function Home() {
             <p>Please enable JavaScript to use the freeform whiteboard with LaTeX math rendering.</p>
           </div>
         </noscript>
-        <footer className="hidden sm:block fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
+        <footer className="cookie-aware-footer hidden sm:block fixed bottom-4 left-4 z-50 text-[12px] text-[var(--color-warm-silver)] select-none pointer-events-none tracking-wide">
           <span className="font-semibold text-[var(--color-warm-charcoal)]">Scrawl</span>
           {" · "}
           Type LaTeX in text mode · Pinch to zoom · Two-finger scroll to pan

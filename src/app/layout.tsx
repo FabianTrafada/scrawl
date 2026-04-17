@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Syne, Space_Mono, Patrick_Hand } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+import ThemeSync from "@/components/ThemeSync";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 const syne = Syne({
   variable: "--font-sans",
@@ -103,9 +105,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${syne.variable} ${spaceMono.variable} ${patrickHand.variable} h-full antialiased`}
+      suppressHydrationWarning={true}
     >
       <body className="h-full w-full overflow-hidden">
+        <ThemeSync />
         {children}
+        <CookieConsentBanner />
         <Toaster position="bottom-right" toastOptions={{ className: "font-sans" }} />
       </body>
     </html>

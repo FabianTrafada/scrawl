@@ -20,7 +20,7 @@ export default function LatexPreview({ content, visible }: Props) {
 
   return (
     <div
-      className="text-[#000000]"
+      className="text-[var(--foreground)]"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

@@ -7,6 +7,7 @@ import type {
   LineElement,
   ArrowElement,
 } from "@/store/canvasStore";
+import { useCanvasStore } from "@/store/canvasStore";
 import rough from "roughjs";
 
 type ShapeType = RectangleElement | EllipseElement | LineElement | ArrowElement;
@@ -18,10 +19,26 @@ interface Props {
 }
 
 export default function ShapeElement({ element, isSelected, onSelect }: Props) {
-  const gRef = useRef<SVGGElement>(null);
+  // roughjs renders into `roughRef` only.
+  // The selection hitbox rect is rendered separately and must not be removed.
+  const rootRef = useRef<SVGGElement>(null);
+  const roughRef = useRef<SVGGElement>(null);
+
+  const activeTool = useCanvasStore((s) => s.activeTool);
+  const isEraser = activeTool === "eraser";
+
+  const DEFAULT_STROKE = "#1e1e1e";
+  const isDefaultStroke =
+    element.strokeColor?.toLowerCase() === DEFAULT_STROKE.toLowerCase();
+
+  const effectiveStroke = isDefaultStroke
+    ? "var(--tool-default-stroke)"
+    : element.strokeColor;
+
+  const glow = isDefaultStroke ? "var(--tool-default-stroke-glow)" : undefined;
 
   useEffect(() => {
-    const g = gRef.current;
+    const g = roughRef.current;
     if (!g) return;
 
     while (g.firstChild) g.removeChild(g.firstChild);
@@ -30,7 +47,7 @@ export default function ShapeElement({ element, isSelected, onSelect }: Props) {
     const rc = rough.svg(svg);
 
     const opts = {
-      stroke: element.strokeColor,
+      stroke: effectiveStroke,
       strokeWidth: element.strokeWidth,
       fill: element.fillColor === "transparent" ? undefined : element.fillColor,
       fillStyle: "hachure" as const,
@@ -97,20 +114,38 @@ export default function ShapeElement({ element, isSelected, onSelect }: Props) {
   const hitBox = getHitBox(element);
 
   return (
-    <g ref={gRef} opacity={element.opacity}>
-      {/* Invisible hit area for selection */}
+    <g
+      ref={rootRef}
+      opacity={element.opacity}
+      style={{
+        pointerEvents: isEraser ? "none" : "auto",
+        ...(glow ? { filter: glow } : {}),
+      }}
+    >
+      {/* roughjs-rendered SVG goes here */}
+      <g ref={roughRef} />
+
+      {/* Selection hitbox rect (must remain mounted) */}
       <rect
         x={hitBox.x}
         y={hitBox.y}
         width={hitBox.w}
         height={hitBox.h}
-        fill="transparent"
+        // Use a tiny-alpha fill so SVG hit-testing reliably triggers pointer events.
+        // Without a non-zero alpha, some browsers treat fully transparent fills as non-hit-testable.
+        fill={isSelected ? "rgba(59, 211, 253, 0.01)" : "rgba(0, 0, 0, 0.01)"}
         stroke={isSelected ? "var(--color-slushie-500)" : "transparent"}
         strokeWidth={isSelected ? 2 : 0}
         strokeDasharray={isSelected ? "6,4" : undefined}
+        pointerEvents={isEraser ? "none" : "all"}
+        data-hitbox="shape"
+        data-element-id={element.id}
+        data-shape-type={element.type}
         style={{ cursor: "move" }}
         onPointerDown={(e) => {
           e.stopPropagation();
+          if (isEraser) return;
+
           onSelect(element.id);
         }}
       />
