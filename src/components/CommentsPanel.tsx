@@ -15,6 +15,7 @@ type CommentItem = {
   x: number | null;
   y: number | null;
   elementId: string | null;
+  parentId: string | null;
   text: string;
   resolved: boolean;
   createdAt: number;
@@ -27,6 +28,8 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
   const { data: session } = useSession();
   const [items, setItems] = useState<CommentItem[]>([]);
   const [text, setText] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState("");
   const [showMentionPicker, setShowMentionPicker] = useState(false);
   const elements = useCanvasStore((s) => s.elements);
@@ -52,7 +55,9 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
   >(null);
   const cameraAnimationRef = useRef<number | null>(null);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMentionSoundRef = useRef(false);
+  const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null);
   const mentionSoundUrl =
     process.env.NEXT_PUBLIC_COMMENT_MENTION_SOUND_URL ??
     "/sounds/comment-mention.mp3";
@@ -186,6 +191,14 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
     return items;
   }, [commentsView, elementScopedItems, items, mentionFilteredItems, selectedElementId]);
 
+  const commentsById = useMemo(
+    () => new Map(items.map((comment) => [comment.id, comment])),
+    [items]
+  );
+
+  const replyTarget = replyToCommentId ? commentsById.get(replyToCommentId) ?? null : null;
+  const failedCount = items.reduce((count, item) => (item.failed ? count + 1 : count), 0);
+
   const upsertComment = (incoming: CommentItem) => {
     setItems((prev) => {
       const byId = prev.find((item) => item.id === incoming.id);
@@ -221,17 +234,29 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
   };
 
   const refresh = useCallback(async () => {
-    const res = await fetch(`/api/rooms/${roomId}/comments`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = (await res.json()) as { comments: CommentItem[] };
-    const seen = new Set<string>();
-    setItems(
-      data.comments.filter((item) => {
-        if (seen.has(item.id)) return false;
-        seen.add(item.id);
-        return true;
-      })
-    );
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/comments`, { cache: "no-store" });
+      if (!res.ok) {
+        setRefreshError(`Failed to load comments (${res.status})`);
+        return;
+      }
+
+      const data = (await res.json()) as { comments: CommentItem[] };
+      const seen = new Set<string>();
+      setItems(
+        data.comments.filter((item) => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        })
+      );
+      setRefreshError(null);
+    } catch {
+      setRefreshError("Failed to load comments");
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [roomId]);
 
   useEffect(() => {
@@ -342,8 +367,12 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
     markMentionsRead();
   }, [commentsPanelOpen, commentsView, markMentionsRead]);
 
-  const postComment = async (commentText: string, elementId: string | null) => {
-    const trimmed = commentText.trim();
+  const postComment = async (payload: {
+    text: string;
+    elementId?: string | null;
+    parentId?: string | null;
+  }) => {
+    const trimmed = payload.text.trim();
     if (!trimmed) return;
 
     const now = Date.now();
@@ -357,7 +386,8 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
       userName: "You",
       x: null,
       y: null,
-      elementId,
+      elementId: payload.elementId ?? null,
+      parentId: payload.parentId ?? null,
       text: trimmed,
       resolved: false,
       createdAt: now,
@@ -369,13 +399,24 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
     setText("");
 
     try {
+      const requestBody: {
+        text: string;
+        elementId?: string | null;
+        parentId?: string | null;
+      } = {
+        text: trimmed,
+      };
+      if (payload.elementId !== undefined) {
+        requestBody.elementId = payload.elementId;
+      }
+      if (payload.parentId !== undefined) {
+        requestBody.parentId = payload.parentId;
+      }
+
       const res = await fetch(`/api/rooms/${roomId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: trimmed,
-          elementId,
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) throw new Error(`POST failed (${res.status})`);
       const data = (await res.json()) as { comment?: CommentItem };
@@ -393,7 +434,36 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
 
   const submitCurrentComment = async () => {
     if (!text.trim()) return;
-    await postComment(text, activeReferenceElementId);
+    await postComment({
+      text,
+      elementId: activeReferenceElementId ?? undefined,
+      parentId: replyTarget?.id,
+    });
+    setReplyToCommentId(null);
+    setShowMentionPicker(false);
+  };
+
+  const retryComment = (item: CommentItem) => {
+    setItems((prev) => prev.filter((it) => it.id !== item.id));
+    void postComment({
+      text: item.text,
+      elementId: item.elementId ?? undefined,
+      parentId: item.parentId ?? undefined,
+    });
+  };
+
+  const retryFailedComments = () => {
+    const failed = items.filter((item) => item.failed);
+    if (!failed.length) return;
+
+    setItems((prev) => prev.filter((item) => !item.failed));
+    failed.forEach((item) => {
+      void postComment({
+        text: item.text,
+        elementId: item.elementId ?? undefined,
+        parentId: item.parentId ?? undefined,
+      });
+    });
   };
 
   const jumpToLatestMention = () => {
@@ -556,6 +626,25 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
           <button
             type="button"
             className="clay-btn clay-btn-ux px-2 py-1 text-[10px]"
+            onClick={() => void refresh()}
+            disabled={isRefreshing}
+            aria-label="Retry loading comments"
+          >
+            {isRefreshing ? "Syncing" : "Retry"}
+          </button>
+          {failedCount > 0 && (
+            <button
+              type="button"
+              className="clay-btn clay-btn-ux px-2 py-1 text-[10px]"
+              onClick={retryFailedComments}
+              aria-label={`Retry ${failedCount} failed comment${failedCount > 1 ? "s" : ""}`}
+            >
+              Retry Failed ({failedCount})
+            </button>
+          )}
+          <button
+            type="button"
+            className="clay-btn clay-btn-ux px-2 py-1 text-[10px]"
             onClick={jumpToLatestMention}
             disabled={!latestMentionElementId}
             aria-label="Jump to latest mention"
@@ -574,6 +663,18 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
       </div>
 
       <div className="space-y-2 overflow-auto flex-1 mb-2 pr-1 clay-scroll">
+        {refreshError && (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[var(--border-oat)] bg-[var(--surface-soft)] px-2.5 py-2 text-[11px]">
+            <span className="text-red-500">{refreshError}</span>
+            <button
+              type="button"
+              className="clay-btn clay-btn-ux px-1.5 py-0.5 text-[10px]"
+              onClick={() => void refresh()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {visibleItems.length === 0 ? (
           <div className="text-[11px] opacity-70 rounded-xl border border-dashed border-[var(--border-oat)] px-3 py-3 bg-[var(--surface-soft)]">
             {commentsView === "element" && !selectedElementId
@@ -583,12 +684,40 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
                 : "No comments yet. Mention collaborators with @name."}
           </div>
         ) : (
-          visibleItems.map((item) => (
-            <div key={item.id} className="border border-[var(--border-oat)] rounded-xl px-2.5 py-2 bg-[var(--surface-soft)] shadow-[var(--panel-shadow-soft)]">
+          visibleItems.map((item) => {
+            const parent = item.parentId ? commentsById.get(item.parentId) : null;
+
+            return (
+            <div key={item.id} className="group border border-[var(--border-oat)] rounded-xl px-2.5 py-2 bg-[var(--surface-soft)] shadow-[var(--panel-shadow-soft)]">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11px] font-semibold">{item.userName}</div>
-                <div className="text-[11px] opacity-70">{new Date(item.createdAt).toLocaleString()}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-[11px] opacity-70">{new Date(item.createdAt).toLocaleString()}</div>
+                  {!item.pending && !item.failed && item.userId !== session?.user?.id && (
+                    <button
+                      type="button"
+                      className="clay-btn clay-btn-ux px-1.5 py-0.5 text-[10px] border border-[var(--border-oat)] opacity-70 hover:opacity-100"
+                      onClick={() => {
+                        setReplyToCommentId(item.id);
+                        composerInputRef.current?.focus();
+                      }}
+                      aria-label={`Reply to ${item.userName}`}
+                    >
+                      Reply
+                    </button>
+                  )}
+                </div>
               </div>
+              {item.parentId && (
+                <div className="mt-1 mb-1 rounded-md border border-dashed border-[var(--border-oat)] bg-[var(--surface)] px-2 py-1">
+                  <div className="text-[10px] uppercase tracking-wider opacity-70">
+                    Replying to {parent?.userName ?? "deleted user"}
+                  </div>
+                  <div className="text-[11px] opacity-80 truncate">
+                    {parent?.text ?? "Original comment is unavailable"}
+                  </div>
+                </div>
+              )}
               {item.elementId && (
                 <button
                   type="button"
@@ -617,10 +746,7 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
                       <button
                         type="button"
                         className="clay-btn clay-btn-ux px-1.5 py-0.5 text-[10px]"
-                        onClick={() => {
-                          setItems((prev) => prev.filter((it) => it.id !== item.id));
-                          void postComment(item.text, item.elementId ?? null);
-                        }}
+                        onClick={() => retryComment(item)}
                       >
                         Retry
                       </button>
@@ -629,84 +755,111 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
                 </div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      <div className="mb-2 min-h-6 pt-1">
-        {activeReferenceElementId ? (
-          <div
-            role="button"
-            tabIndex={0}
-            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[var(--border-oat)] bg-[var(--surface)] px-2 py-0.5 text-[10px] hover:opacity-95 cursor-pointer"
-            onClick={() => focusReferencedElement(activeReferenceElementId)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                focusReferencedElement(activeReferenceElementId);
-              }
-            }}
-            aria-label={`Focus referenced element ${activeReferenceElementId.slice(0, 8)}`}
-          >
-            <span className="uppercase tracking-wider opacity-70">Referencing</span>
-            <span className="font-semibold">#{activeReferenceElementId.slice(0, 8)}</span>
-            <button
-              type="button"
-              className="opacity-70 hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (selectedElementId) {
-                  setClearedReferenceSelectionId(selectedElementId);
+      <div className="pt-2 border-t border-dashed border-[var(--border-oat)]">
+        <div className="rounded-xl border border-[var(--border-oat)] bg-[var(--surface)] overflow-hidden">
+          {(replyToCommentId || activeReferenceElementId) && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-dashed border-[var(--border-oat)] bg-[var(--surface-soft)] px-2.5 py-1.5 text-[10px]">
+              {replyToCommentId && (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-oat)] bg-[var(--surface)] px-2 py-0.5">
+                  <span className="uppercase tracking-wider opacity-70">Replying to</span>
+                  <span className="font-semibold">
+                    {replyTarget ? `@${replyTarget.userName}` : "unavailable comment"}
+                  </span>
+                  <button
+                    type="button"
+                    className="opacity-70 hover:opacity-100"
+                    onClick={() => setReplyToCommentId(null)}
+                    aria-label="Cancel reply"
+                  >
+                    x
+                  </button>
+                </div>
+              )}
+
+              {activeReferenceElementId ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[var(--border-oat)] bg-[var(--surface)] px-2 py-0.5 hover:opacity-95 cursor-pointer"
+                  onClick={() => focusReferencedElement(activeReferenceElementId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      focusReferencedElement(activeReferenceElementId);
+                    }
+                  }}
+                  aria-label={`Focus referenced element ${activeReferenceElementId.slice(0, 8)}`}
+                >
+                  <span className="uppercase tracking-wider opacity-70">Referencing</span>
+                  <span className="font-semibold">#{activeReferenceElementId.slice(0, 8)}</span>
+                  <button
+                    type="button"
+                    className="opacity-70 hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedElementId) {
+                        setClearedReferenceSelectionId(selectedElementId);
+                      }
+                    }}
+                    aria-label="Clear referenced element"
+                  >
+                    x
+                  </button>
+                </div>
+              ) : (
+                <div className="opacity-60">Posting to whole room.</div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2 p-2">
+            <input
+              ref={composerInputRef}
+              value={text}
+              onChange={(e) => {
+                const next = e.target.value;
+                setText(next);
+                const mentionMatch = next.match(/@([a-zA-Z0-9._-]*)$/);
+                if (mentionMatch) {
+                  setMentionQuery(mentionMatch[1] ?? "");
+                  setShowMentionPicker(true);
+                } else {
+                  setShowMentionPicker(false);
                 }
               }}
-              aria-label="Clear referenced element"
+              onKeyDown={(e) => {
+                if (showMentionPicker && mentionCandidates.length > 0 && e.key === "Tab") {
+                  e.preventDefault();
+                  insertMention(mentionCandidates[0]);
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submitCurrentComment();
+                }
+              }}
+              placeholder={
+                replyTarget
+                  ? `Reply to ${replyTarget.userName}...`
+                  : activeReferenceElementId
+                    ? "Comment on selected element..."
+                    : "Add global comment..."
+              }
+              className="flex-1 clay-input px-2 py-1"
+            />
+            <button
+              className="clay-btn clay-btn-ux px-2 py-1"
+              onClick={() => void submitCurrentComment()}
             >
-              x
+              Add
             </button>
           </div>
-        ) : (
-          <div className="text-[10px] opacity-60">Posting to whole room.</div>
-        )}
-      </div>
-
-      <div className="flex gap-2 pt-2 border-t border-dashed border-[var(--border-oat)]">
-        <input
-          value={text}
-          onChange={(e) => {
-            const next = e.target.value;
-            setText(next);
-            const mentionMatch = next.match(/@([a-zA-Z0-9._-]*)$/);
-            if (mentionMatch) {
-              setMentionQuery(mentionMatch[1] ?? "");
-              setShowMentionPicker(true);
-            } else {
-              setShowMentionPicker(false);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (showMentionPicker && mentionCandidates.length > 0 && e.key === "Tab") {
-              e.preventDefault();
-              insertMention(mentionCandidates[0]);
-              return;
-            }
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void submitCurrentComment();
-            }
-          }}
-          placeholder={
-            activeReferenceElementId
-              ? "Comment on selected element..."
-              : "Add global comment..."
-          }
-          className="flex-1 clay-input px-2 py-1"
-        />
-        <button
-          className="clay-btn clay-btn-ux px-2 py-1"
-          onClick={() => void submitCurrentComment()}
-        >
-          Add
-        </button>
+        </div>
       </div>
       {showMentionPicker && mentionCandidates.length > 0 && (
         <div className="mt-2 clay-card clay-card-dashed p-2 text-[11px]">

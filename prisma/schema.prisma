@@ -86,6 +86,7 @@ model RoomComment {
   id        String   @id @default(cuid())
   roomId    String
   authorId  String
+  parentId  String?
   elementId String?
   x         Float?
   y         Float?
@@ -94,10 +95,13 @@ model RoomComment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  room   Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  author User @relation("RoomCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  room    Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author  User         @relation("RoomCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parent  RoomComment? @relation("RoomCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies RoomComment[] @relation("RoomCommentReplies")
 
   @@index([roomId, createdAt])
+  @@index([roomId, parentId, createdAt])
   @@index([authorId])
 }
 

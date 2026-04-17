@@ -11,6 +11,7 @@ import {
   shouldPromptCookieConsent,
   subscribeCookieConsent,
 } from "@/lib/cookie-consent";
+import { useHydrated } from "@/lib/use-hydrated";
 
 function CookieRow({
   title,
@@ -57,14 +58,16 @@ function CookieRow({
 }
 
 export default function CookieConsentBanner() {
+  const hasHydrated = useHydrated();
+
   useSyncExternalStore(
     subscribeCookieConsent,
     getCookieConsentSnapshotKey,
     getServerCookieConsentSnapshotKey
   );
 
-  const consent = readCookieConsent();
-  const shouldShow = shouldPromptCookieConsent(consent);
+  const consent = hasHydrated ? readCookieConsent() : null;
+  const shouldShow = hasHydrated && shouldPromptCookieConsent(consent);
 
   const [customOpen, setCustomOpen] = useState(false);
   const [preferencesEnabled, setPreferencesEnabled] = useState(false);
