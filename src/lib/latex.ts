@@ -1,5 +1,9 @@
 import katex from "katex";
 
+export const KATEX_MACROS: Record<string, string> = {
+  "\\answer": "\\underline{\\underline{#1}}",
+};
+
 /**
  * Detect if text contains any LaTeX that should be rendered.
  * Returns true for:
@@ -146,6 +150,7 @@ function renderKatex(expression: string, displayMode: boolean): string {
       throwOnError: false,
       displayMode,
       output: "html",
+      macros: KATEX_MACROS,
     });
   } catch {
     return `<span style="color:red">${escapeHtml(expression)}</span>`;

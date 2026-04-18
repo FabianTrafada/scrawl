@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import katex from "katex";
+import { KATEX_MACROS } from "@/lib/latex";
 
 interface CheatItem {
   cmd: string;
@@ -40,6 +41,7 @@ const SECTIONS: { title: string; items: CheatItem[] }[] = [
     items: [
       { cmd: "\\overline{x}", desc: "Overline", latex: "\\overline{x}" },
       { cmd: "\\underline{x}", desc: "Underline", latex: "\\underline{x}" },
+      { cmd: "\\answer{42}", desc: "Double underline answer", latex: "\\answer{42}" },
       { cmd: "\\hat{x}", desc: "Hat accent", latex: "\\hat{x}" },
       { cmd: "\\bar{x}", desc: "Bar accent", latex: "\\bar{x}" },
       { cmd: "\\vec{x}", desc: "Vector arrow", latex: "\\vec{x}" },
@@ -113,6 +115,7 @@ function renderKatexSafe(expression: string): string {
       displayMode: false,
       trust: true,
       strict: false,
+      macros: KATEX_MACROS,
     });
   } catch {
     return expression;

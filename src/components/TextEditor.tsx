@@ -21,6 +21,7 @@ const LATEX_SNIPPETS: { label: string; insert: string; cursorOffset: number }[] 
   { label: "xₙ", insert: "x_{}", cursorOffset: 3 },
   { label: "÷", insert: "\\frac{}{}", cursorOffset: 6 },
   { label: "√", insert: "\\sqrt{}", cursorOffset: 6 },
+  { label: "Ans", insert: "\\answer{}", cursorOffset: 8 },
   { label: "cancel", insert: "\\cancel{}", cursorOffset: 8 },
   { label: "x̄", insert: "\\overline{}", cursorOffset: 10 },
   { label: "Σ", insert: "\\sum_{i=1}^{n}", cursorOffset: 14 },
