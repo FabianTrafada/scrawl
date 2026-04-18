@@ -77,13 +77,9 @@ export function stripDollarDelimiters(text: string): string {
   return trimmed;
 }
 
-/**
- * Render content that may contain mixed text and math.
- * Math is delimited by $...$ for inline math.
- * If the entire string is pure math, renders it all as LaTeX.
- */
-export function renderMixedContent(text: string, displayMode: boolean): string {
+function renderMixedSingleLine(text: string, displayMode: boolean): string {
   const t = text.trim();
+  if (!t) return "";
 
   // If it's pure math, render everything with KaTeX
   if (isPureMath(t)) {
@@ -126,6 +122,22 @@ export function renderMixedContent(text: string, displayMode: boolean): string {
   }
 
   return parts.join("");
+}
+
+/**
+ * Render content that may contain mixed text and math.
+ * Math is delimited by $...$ for inline math.
+ * If the entire string is pure math, renders it all as LaTeX.
+ */
+export function renderMixedContent(text: string, displayMode: boolean): string {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  if (!normalized.includes("\n")) {
+    return renderMixedSingleLine(normalized, displayMode);
+  }
+  return normalized
+    .split("\n")
+    .map((line) => renderMixedSingleLine(line, displayMode))
+    .join("<br/>");
 }
 
 function renderKatex(expression: string, displayMode: boolean): string {

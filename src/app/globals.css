@@ -183,6 +183,15 @@ svg {
   display: block;
 }
 
+.canvas-text-latex .katex-display {
+  margin: 0;
+  text-align: left;
+}
+
+.canvas-text-latex .katex-display > .katex {
+  display: inline-block;
+}
+
 /* Clay Design System Classes */
 .clay-card {
   background:

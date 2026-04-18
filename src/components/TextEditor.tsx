@@ -58,14 +58,22 @@ export default function TextEditor({
   const [content, setContent] = useState(initialContent);
   const contentRef = useRef(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mountedAtRef = useRef(Date.now());
+  const mountedAtRef = useRef<number>(0);
   const committedRef = useRef(false);
   const strokeColor = useCanvasStore((s) => s.strokeColor);
+
+  const adjustTextareaHeight = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "0px";
+    ta.style.height = `${Math.max(ta.scrollHeight, 42)}px`;
+  }, []);
 
   // Keep ref in sync with state so callbacks always see the latest value
   useEffect(() => {
     contentRef.current = content;
-  }, [content]);
+    adjustTextareaHeight();
+  }, [content, adjustTextareaHeight]);
 
   useEffect(() => {
     mountedAtRef.current = Date.now();
@@ -75,10 +83,11 @@ export default function TextEditor({
       if (ta) {
         ta.focus();
         ta.setSelectionRange(ta.value.length, ta.value.length);
+        adjustTextareaHeight();
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, []);
+  }, [adjustTextareaHeight]);
 
   const dismiss = useCallback(() => {
     if (committedRef.current) return;
@@ -97,8 +106,12 @@ export default function TextEditor({
     if (e.key === "Escape") {
       committedRef.current = true;
       onCancel();
+      return;
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && e.shiftKey) {
+      return;
+    }
+    if (e.key === "Enter") {
       e.preventDefault();
       dismiss();
     }
@@ -180,7 +193,7 @@ export default function TextEditor({
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
-          className="block w-full resize-none min-h-[42px] leading-tight outline-none bg-transparent"
+          className="block w-full resize-none min-h-[42px] leading-tight outline-none bg-transparent overflow-hidden"
           style={{
             fontSize,
             color: strokeColor,

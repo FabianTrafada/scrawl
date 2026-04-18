@@ -46,19 +46,33 @@ export default function TextElementRenderer({
     requestAnimationFrame(() => {
       const el = contentRef.current;
       if (!el) return;
-      const w = el.scrollWidth;
-      const h = el.scrollHeight;
-      if (w > 0 && h > 0) {
-        setMeasured({ w, h });
+      const naturalW = el.scrollWidth;
+      const naturalH = el.scrollHeight;
+      if (naturalW > 0 && naturalH > 0) {
+        setMeasured({ w: naturalW, h: naturalH });
 
         if (element.userResized) {
-          onResize?.(element.id, element.width, h);
+          if (element.isLatex && element.width > 0) {
+            const scaledHeight = naturalH * (element.width / naturalW);
+            onResize?.(element.id, element.width, scaledHeight);
+          } else {
+            onResize?.(element.id, element.width, naturalH);
+          }
         } else {
-          onResize?.(element.id, w + 8, h);
+          onResize?.(element.id, naturalW + 8, naturalH);
         }
       }
     });
-  }, [latexHtml, element.content, element.fontSize, element.width, element.id, element.userResized, onResize]);
+  }, [
+    latexHtml,
+    element.content,
+    element.fontSize,
+    element.width,
+    element.id,
+    element.userResized,
+    element.isLatex,
+    onResize,
+  ]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isEraser) return;
@@ -73,10 +87,18 @@ export default function TextElementRenderer({
   };
 
   const pad = 8;
+  const naturalW = Math.max(measured.w, 1);
+  const naturalH = Math.max(measured.h, 1);
   const displayW = element.userResized
-    ? Math.max(element.width, 40)
-    : Math.max(measured.w, 40);
-  const displayH = Math.max(measured.h, 30);
+    ? Math.max(element.width, 20)
+    : Math.max(naturalW, 40);
+  const latexScale =
+    element.isLatex && element.userResized
+      ? Math.max(displayW / naturalW, 0.05)
+      : 1;
+  const displayH = element.userResized && element.isLatex
+    ? Math.max(naturalH * latexScale, 30)
+    : Math.max(naturalH, 30);
 
   return (
     <g>
@@ -104,6 +126,7 @@ export default function TextElementRenderer({
       >
         <div
           ref={contentRef}
+          className={element.isLatex ? "canvas-text-latex" : undefined}
           onPointerDown={isEraser ? undefined : handlePointerDown}
           onDoubleClick={isEraser ? undefined : handleDoubleClick}
           style={{
@@ -113,11 +136,13 @@ export default function TextElementRenderer({
             userSelect: "none",
             padding: 4,
             lineHeight: 1.4,
-            whiteSpace: "pre-wrap",
+            whiteSpace: element.isLatex ? "normal" : "pre-wrap",
             wordBreak: "break-word",
-            maxWidth: element.userResized ? displayW : undefined,
+            maxWidth: element.userResized && !element.isLatex ? displayW : undefined,
             fontFamily: element.isLatex ? undefined : "var(--font-hand)",
             display: "inline-block",
+            transform: element.isLatex && element.userResized ? `scale(${latexScale})` : undefined,
+            transformOrigin: "top left",
             filter: glow,
             pointerEvents: isEraser ? "none" : "auto",
           }}
