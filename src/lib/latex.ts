@@ -1,7 +1,7 @@
 import katex from "katex";
 
 export const KATEX_MACROS: Record<string, string> = {
-  "\\answer": "\\underline{\\underline{#1}}",
+  "\\answer": "#1\\mkern4mu\\diagup\\mkern-7mu\\diagup\\mkern7mu",
 };
 
 /**
