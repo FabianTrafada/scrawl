@@ -18,6 +18,10 @@ import {
   type PersistedSceneV1,
 } from "@/lib/storage";
 import { uploadImageToR2 } from "@/lib/upload";
+import {
+  clearPendingRoomImport,
+  getPendingRoomImport,
+} from "@/lib/room-import";
 
 import PenElement from "@/elements/PenElement";
 import ShapeElement from "@/elements/ShapeElement";
@@ -156,6 +160,7 @@ export default function Canvas({ roomId }: CanvasProps) {
   const [spaceHeld, setSpaceHeld] = useState(false);
   const objectUrlsRef = useRef<Set<string>>(new Set());
   const isHydratingRef = useRef(false);
+  const didRunRoomImportRef = useRef(false);
   const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
   const initialPinch = useRef<{
     distance: number;
@@ -227,6 +232,137 @@ export default function Canvas({ roomId }: CanvasProps) {
       objectUrlsRef.current.clear();
     };
   }, [hydrateScene, isInRoom]);
+
+  useEffect(() => {
+    if (!isInRoom || !roomId) return;
+    if (didRunRoomImportRef.current) return;
+
+    const pendingImport = getPendingRoomImport(roomId);
+    if (!pendingImport) return;
+
+    didRunRoomImportRef.current = true;
+    let cancelled = false;
+
+    const uploadWithRetry = async (blob: Blob, retries = 2) => {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+          return await uploadImageToR2(blob, roomId);
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (lastError) {
+        console.warn("Failed to upload imported image to collaborative storage", lastError);
+      }
+      return null;
+    };
+
+    const run = async () => {
+      if (!pendingImport.scene) {
+        clearPendingRoomImport();
+        return;
+      }
+
+      const importedElements = await Promise.all(
+        pendingImport.scene.elements.map(async (el) => {
+          if (el.type !== "image") return structuredClone(el);
+
+          const imageEl = structuredClone(
+            el
+          ) as import("@/store/canvasStore").ImageElement;
+          const hasRemoteSrc =
+            typeof imageEl.src === "string" &&
+            !imageEl.src.startsWith("blob:") &&
+            !imageEl.src.startsWith("data:");
+
+          if (imageEl.r2Key && hasRemoteSrc) {
+            return {
+              ...imageEl,
+              imageId: undefined,
+              uploadStatus: "ready" as const,
+              uploadProgress: 100,
+            };
+          }
+
+          let blob: Blob | null = null;
+          if (imageEl.imageId) {
+            blob = await getImageBlob(imageEl.imageId);
+          }
+          if (!blob && imageEl.src?.startsWith("data:")) {
+            try {
+              blob = dataUrlToBlob(imageEl.src);
+            } catch {
+              blob = null;
+            }
+          }
+
+          if (!blob) {
+            if (hasRemoteSrc) {
+              return {
+                ...imageEl,
+                imageId: undefined,
+                uploadStatus: "ready" as const,
+                uploadProgress: 100,
+              };
+            }
+            return {
+              ...imageEl,
+              src: undefined,
+              imageId: undefined,
+              uploadStatus: "failed" as const,
+              uploadProgress: 0,
+            };
+          }
+
+          const uploaded = await uploadWithRetry(blob);
+          if (!uploaded) {
+            if (hasRemoteSrc) {
+              return {
+                ...imageEl,
+                imageId: undefined,
+                uploadStatus: "ready" as const,
+                uploadProgress: 100,
+              };
+            }
+            return {
+              ...imageEl,
+              src: undefined,
+              imageId: undefined,
+              uploadStatus: "failed" as const,
+              uploadProgress: 0,
+            };
+          }
+
+          return {
+            ...imageEl,
+            src: uploaded.publicUrl,
+            r2Key: uploaded.key,
+            imageId: undefined,
+            uploadStatus: "ready" as const,
+            uploadProgress: 100,
+          };
+        })
+      );
+
+      if (cancelled) return;
+
+      hydrateScene({
+        elements: importedElements as CanvasElement[],
+        camera: pendingImport.scene.camera,
+      });
+      clearPendingRoomImport();
+    };
+
+    void run().catch((err) => {
+      console.warn("Failed to import local scene into room", err);
+      clearPendingRoomImport();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateScene, isInRoom, roomId]);
 
   useEffect(
     () => () => {

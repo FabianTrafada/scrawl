@@ -11,6 +11,9 @@ import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PresenceSource, RoomActivity } from "@/types/collab";
+import { clearPendingRoomImport, setPendingRoomImport } from "@/lib/room-import";
+import { useCanvasStore, type CanvasElement } from "@/store/canvasStore";
+import { loadScene } from "@/lib/storage";
 
 function ErrorToaster() {
   const searchParams = useSearchParams();
@@ -149,12 +152,32 @@ const onlineCountLabel = (count: number | null, source: PresenceSource | undefin
       });
       if (res.ok) {
         const data = await res.json();
+        const state = useCanvasStore.getState();
+        const persisted = loadScene();
+        const sourceElements =
+          state.elements.length > 0 ? state.elements : (persisted?.elements ?? []);
+        const sourceCamera =
+          state.elements.length > 0 ? state.camera : (persisted?.camera ?? state.camera);
+        const sceneElements = sourceElements.map((el) => structuredClone(el)) as CanvasElement[];
+        const createdAt = Date.now();
+        setPendingRoomImport({
+          roomId: data.room.id,
+          createdAt,
+          scene: {
+            version: 1,
+            savedAt: createdAt,
+            elements: sceneElements,
+            camera: sourceCamera,
+          },
+        });
         toast.success("Room created successfully");
         router.push(`/room/${data.room.id}`);
       } else {
+        clearPendingRoomImport();
         toast.error("Failed to create room");
       }
     } catch {
+      clearPendingRoomImport();
       toast.error("Network error while creating room");
     } finally {
       setCreating(false);
