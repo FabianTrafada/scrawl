@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Canvas from "@/components/Canvas";
 import Toolbar from "@/components/Toolbar";
 import LatexCheatsheet from "@/components/LatexCheatsheet";
+import CalculatorPanel from "@/components/CalculatorPanel";
 import UserMenu from "@/components/UserMenu";
 import Script from "next/script";
 import { useSession } from "@/lib/auth-client";
@@ -95,25 +96,32 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [pollingMs, setPollingMs] = useState(50_000);
 
-  const fetchRooms = useCallback(async () => {
+  const fetchRooms = useCallback(async (isActive?: () => boolean) => {
     setLoadingRooms(true);
     try {
       const res = await fetch("/api/rooms");
-      if (res.ok) {
-        const data = await res.json();
-        setRooms(data.rooms ?? []);
-        if (typeof data?.polling?.recommendedMs === "number") {
-          setPollingMs(Math.max(15_000, data.polling.recommendedMs));
+      if (!isActive || isActive()) {
+        if (res.ok) {
+          const data = await res.json();
+          setRooms(data.rooms ?? []);
+          if (typeof data?.polling?.recommendedMs === "number") {
+            setPollingMs(Math.max(15_000, data.polling.recommendedMs));
+          }
         }
+        setLoadingRooms(false);
       }
-    } finally {
-      setLoadingRooms(false);
+    } catch {
+      if (!isActive || isActive()) {
+        setLoadingRooms(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (showDashboard && session?.user) {
-      fetchRooms();
+      let active = true;
+      fetchRooms(() => active);
+      return () => { active = false; };
     }
   }, [showDashboard, session, fetchRooms]);
 
@@ -176,10 +184,10 @@ const onlineCountLabel = (count: number | null, source: PresenceSource | undefin
         clearPendingRoomImport();
         toast.error("Failed to create room");
       }
+      setCreating(false);
     } catch {
       clearPendingRoomImport();
       toast.error("Network error while creating room");
-    } finally {
       setCreating(false);
     }
   };
@@ -212,6 +220,7 @@ const onlineCountLabel = (count: number | null, source: PresenceSource | undefin
         <h1 className="sr-only">Scrawl — Freeform Whiteboard with LaTeX Math Rendering</h1>
         <Canvas />
         <Toolbar />
+        <CalculatorPanel />
         <LatexCheatsheet />
 
         {/* Top-right controls for home page */}
@@ -236,7 +245,11 @@ const onlineCountLabel = (count: number | null, source: PresenceSource | undefin
           <div className="fixed inset-0 z-[90] flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+              role="button"
+              tabIndex={0}
+              aria-label="Close dashboard"
               onClick={() => setShowDashboard(false)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowDashboard(false); }}
             />
             <div 
               className="relative w-full max-w-md mx-4 clay-card max-h-[80vh] overflow-hidden flex flex-col bg-[var(--surface)] rounded-3xl"

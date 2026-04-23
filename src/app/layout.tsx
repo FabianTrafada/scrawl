@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import ThemeSync from "@/components/ThemeSync";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import { Analytics } from "@vercel/analytics/next"
 
 const syne = Syne({
   variable: "--font-sans",
@@ -112,6 +113,7 @@ export default function RootLayout({
         {children}
         <CookieConsentBanner />
         <Toaster position="bottom-right" toastOptions={{ className: "font-sans" }} />
+	<Analytics />
       </body>
     </html>
   );
