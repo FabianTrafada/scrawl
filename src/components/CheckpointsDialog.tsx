@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCanvasStore } from "@/store/canvasStore";
 import { toast } from "sonner";
 
@@ -38,7 +38,7 @@ export default function CheckpointsDialog({ roomId }: { roomId: string }) {
   const [saving, setSaving] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
-  const hasContent = useMemo(() => elements.length > 0, [elements.length]);
+  const hasContent = elements.length > 0;
 
   const fetchCheckpoints = useCallback(async () => {
     setLoading(true);
@@ -47,6 +47,8 @@ export default function CheckpointsDialog({ roomId }: { roomId: string }) {
       if (!res.ok) return;
       const data = (await res.json()) as { checkpoints?: CheckpointListItem[] };
       setItems(data.checkpoints ?? []);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -79,9 +81,10 @@ export default function CheckpointsDialog({ roomId }: { roomId: string }) {
         </div>
 
         <div className="mb-3">
-          <label className="clay-kicker block mb-1">Create checkpoint</label>
+          <label htmlFor="checkpoint-name" className="clay-kicker block mb-1">Create checkpoint</label>
           <div className="flex gap-2">
             <input
+              id="checkpoint-name"
               className="flex-1 clay-input px-3 py-2"
               placeholder="Before geometry proof"
               value={name}
@@ -114,6 +117,8 @@ export default function CheckpointsDialog({ roomId }: { roomId: string }) {
                   setName("");
                   toast.success("Checkpoint created");
                   void fetchCheckpoints();
+                } catch (err) {
+                  console.error(err);
                 } finally {
                   setSaving(false);
                 }
@@ -164,6 +169,8 @@ export default function CheckpointsDialog({ roomId }: { roomId: string }) {
                         });
                         toast.success(`Restored "${item.name}"`);
                         setOpen(false);
+                      } catch (err) {
+                        console.error(err);
                       } finally {
                         setRestoringId(null);
                       }

@@ -139,6 +139,7 @@ interface CanvasState {
   mobileQuickDrawerOpen: boolean;
   commentsPanelOpen: boolean;
   commentsView: CommentsViewMode;
+  calculatorOpen: boolean;
   shareDialogOpen: boolean;
   checkpointsDialogOpen: boolean;
   followPresenter: boolean;
@@ -177,6 +178,7 @@ interface CanvasState {
   setMobileQuickDrawerOpen: (open: boolean) => void;
   setCommentsPanelOpen: (open: boolean) => void;
   setCommentsView: (view: CommentsViewMode) => void;
+  setCalculatorOpen: (open: boolean) => void;
   setShareDialogOpen: (open: boolean) => void;
   setCheckpointsDialogOpen: (open: boolean) => void;
   setFollowPresenter: (follow: boolean) => void;
@@ -267,6 +269,7 @@ export const useCanvasStore = create<WithLiveblocks<CanvasState>>()(
       mobileQuickDrawerOpen: false,
       commentsPanelOpen: false,
       commentsView: "all",
+      calculatorOpen: false,
       shareDialogOpen: false,
       checkpointsDialogOpen: false,
       followPresenter: false,
@@ -329,6 +332,7 @@ export const useCanvasStore = create<WithLiveblocks<CanvasState>>()(
       setMobileQuickDrawerOpen: (open) => set({ mobileQuickDrawerOpen: open }),
       setCommentsPanelOpen: (open) => set({ commentsPanelOpen: open }),
       setCommentsView: (view) => set({ commentsView: view }),
+      setCalculatorOpen: (open) => set({ calculatorOpen: open }),
       setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
       setCheckpointsDialogOpen: (open) => set({ checkpointsDialogOpen: open }),
       setFollowPresenter: (follow) => set({ followPresenter: follow }),

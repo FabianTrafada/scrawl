@@ -51,16 +51,30 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
       if (res.ok) {
         setData(await res.json());
       }
-    } finally {
+      setLoading(false);
+    } catch {
       setLoading(false);
     }
   }, [roomId]);
 
   useEffect(() => {
-    if (open) {
-      fetchShare();
-    }
-  }, [open, fetchShare]);
+    if (!open) return;
+    let active = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/rooms/${roomId}/share`);
+        if (res.ok && active) {
+          setData(await res.json());
+        }
+        if (active) setLoading(false);
+      } catch {
+        if (active) setLoading(false);
+      }
+    };
+    run();
+    return () => { active = false; };
+  }, [open, roomId]);
 
   const handleCloseRoom = async () => {
     if (closing) return;
@@ -77,9 +91,9 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
       } else {
         toast.error("Failed to close/leave room");
       }
+      setClosing(false);
     } catch {
       toast.error("Network error while trying to close/leave room");
-    } finally {
       setClosing(false);
     }
   };
@@ -102,9 +116,9 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
         setInviteEmail("");
         fetchShare();
       }
+      setSending(false);
     } catch {
       toast.error("Network error while sending invite");
-    } finally {
       setSending(false);
     }
   };
@@ -149,10 +163,19 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Close dialog"
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={() => {
           setShareDialogOpen(false);
           onClose();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            setShareDialogOpen(false);
+            onClose();
+          }
         }}
       />
 
@@ -189,10 +212,11 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
         {/* Default access */}
         {data?.isOwner && data.defaultAccess !== undefined && (
           <div className="mb-4">
-            <label className="text-xs font-medium text-[var(--color-warm-silver)] uppercase tracking-wider mb-1.5 block">
+            <label htmlFor="default-access-select" className="text-xs font-medium text-[var(--color-warm-silver)] uppercase tracking-wider mb-1.5 block">
               Anyone with the link
             </label>
             <select
+              id="default-access-select"
               value={data.defaultAccess}
               onChange={(e) => handleAccessChange(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-[var(--border-oat)] bg-[var(--input-bg)] text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-slushie-500)]"
@@ -207,11 +231,12 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
         {/* Invite by email */}
         {data?.isOwner && (
           <div className="mb-4">
-            <label className="text-xs font-medium text-[var(--color-warm-silver)] uppercase tracking-wider mb-1.5 block">
+            <label htmlFor="invite-email-input" className="text-xs font-medium text-[var(--color-warm-silver)] uppercase tracking-wider mb-1.5 block">
               Invite by email
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
+                id="invite-email-input"
                 type="email"
                 placeholder="colleague@example.com"
                 value={inviteEmail}
@@ -244,8 +269,8 @@ export default function ShareDialog({ roomId, open, onClose }: ShareDialogProps)
         {loading && (
           <div className="flex flex-col gap-3 mt-4">
             <Skeleton className="h-4 w-20 mb-2" />
-            {[1, 2].map((i) => (
-              <div key={i} className="flex items-center gap-3 py-2">
+            {["skeleton-1", "skeleton-2"].map((key) => (
+              <div key={key} className="flex items-center gap-3 py-2">
                 <Skeleton className="w-8 h-8 rounded-full shrink-0" />
                 <div className="flex-1">
                   <Skeleton className="h-4 w-1/3 mb-1.5" />

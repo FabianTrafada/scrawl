@@ -25,6 +25,7 @@ interface QuickActionsProps {
   onTogglePresent: () => void;
   onToggleFollow: () => void;
   onOpenCheckpoints: () => void;
+  onToggleCalculator: () => void;
 }
 
 export default function UserMenu({ quickActions }: { quickActions?: QuickActionsProps }) {
@@ -158,6 +159,9 @@ export default function UserMenu({ quickActions }: { quickActions?: QuickActions
                 </button>
                 <button className="clay-btn clay-btn-ux px-2 py-1.5 text-left text-xs border border-[var(--border-oat)]" onClick={quickActions.onToggleComments}>
                   Comments: {quickActions.commentsPanelOpen ? "On" : "Off"}
+                </button>
+                <button className="clay-btn clay-btn-ux px-2 py-1.5 text-left text-xs border border-[var(--border-oat)]" onClick={quickActions.onToggleCalculator}>
+                  Calculator
                 </button>
                 {quickActions.isInRoom && (
                   <>

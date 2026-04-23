@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect, useMemo } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo, useId } from "react";
 import { getStroke } from "perfect-freehand";
 import polygonClipping from "polygon-clipping";
 import {
@@ -95,8 +95,9 @@ function getSvgPathFromStroke(stroke: number[][]): string {
 
 export default function Canvas({ roomId }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const gridPatternId = useRef(`canvas-grid-${Math.random().toString(36).slice(2, 9)}`);
-  const dotPatternId = useRef(`canvas-dot-${Math.random().toString(36).slice(2, 9)}`);
+  const stableId = useId();
+  const gridPatternId = `canvas-grid-${stableId}`;
+  const dotPatternId = `canvas-dot-${stableId}`;
 
   const elements = useCanvasStore((s) => s.elements);
   const activeTool = useCanvasStore((s) => s.activeTool);
@@ -130,6 +131,8 @@ export default function Canvas({ roomId }: CanvasProps) {
   const setViewportSize = useCanvasStore((s) => s.setViewportSize);
   const setActivePresenterId = useCanvasStore((s) => s.setActivePresenterId);
   const setActiveTool = useCanvasStore((s) => s.setActiveTool);
+  const calculatorOpen = useCanvasStore((s) => s.calculatorOpen);
+  const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
   const focusElementRequest = useCanvasStore((s) => s.focusElementRequest);
   const clearElementFocusRequest = useCanvasStore((s) => s.clearElementFocusRequest);
   const hydrateScene = useCanvasStore((s) => s.hydrateScene);
@@ -462,6 +465,9 @@ export default function Canvas({ roomId }: CanvasProps) {
             );
             }
             break;
+          case "c":
+            setCalculatorOpen(!calculatorOpen);
+            break;
           case "delete":
           case "backspace":
             {
@@ -623,7 +629,7 @@ export default function Canvas({ roomId }: CanvasProps) {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("paste", handlePaste);
     };
-  }, [textEditor, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements, isInRoom, roomId, activePresenterId, setActivePresenterId]);
+  }, [textEditor, setActiveTool, pushToHistory, deleteElement, undo, redo, camera, addElement, elements, isInRoom, roomId, activePresenterId, setActivePresenterId, calculatorOpen, setCalculatorOpen]);
 
   // Zoom and Pan with scroll/trackpad
   useEffect(() => {
@@ -1665,14 +1671,15 @@ export default function Canvas({ roomId }: CanvasProps) {
   );
 
   const shouldShowBackToContent = useMemo(() => {
-    if (!contentBounds || !svgRef.current) return false;
-    const rect = svgRef.current.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
+    if (!contentBounds) return false;
+    const vw = viewportSize.width || 0;
+    const vh = viewportSize.height || 0;
+    if (vw <= 0 || vh <= 0) return false;
 
     const viewLeft = -camera.x / camera.zoom;
     const viewTop = -camera.y / camera.zoom;
-    const viewRight = (rect.width - camera.x) / camera.zoom;
-    const viewBottom = (rect.height - camera.y) / camera.zoom;
+    const viewRight = (vw - camera.x) / camera.zoom;
+    const viewBottom = (vh - camera.y) / camera.zoom;
 
     const margin = 120;
     const contentOutOfView =
@@ -1682,7 +1689,7 @@ export default function Canvas({ roomId }: CanvasProps) {
       contentBounds.y > viewBottom - margin;
 
     return contentOutOfView;
-  }, [contentBounds, camera]);
+  }, [contentBounds, camera, viewportSize]);
 
   const handleBackToContent = useCallback(() => {
     if (!contentBounds || !svgRef.current) return;
@@ -1767,7 +1774,7 @@ export default function Canvas({ roomId }: CanvasProps) {
           </filter>
           {canvasBackgroundMode === "grid" && (
             <pattern
-              id={gridPatternId.current}
+              id={gridPatternId}
               width={gridSize}
               height={gridSize}
               patternUnits="userSpaceOnUse"
@@ -1783,7 +1790,7 @@ export default function Canvas({ roomId }: CanvasProps) {
           )}
           {canvasBackgroundMode === "dot" && (
             <pattern
-              id={dotPatternId.current}
+              id={dotPatternId}
               width={gridSize}
               height={gridSize}
               patternUnits="userSpaceOnUse"
@@ -1804,9 +1811,9 @@ export default function Canvas({ roomId }: CanvasProps) {
           height="100%"
           fill={
             canvasBackgroundMode === "grid"
-              ? `url(#${gridPatternId.current})`
+              ? `url(#${gridPatternId})`
               : canvasBackgroundMode === "dot"
-                ? `url(#${dotPatternId.current})`
+                ? `url(#${dotPatternId})`
                 : "transparent"
           }
         />

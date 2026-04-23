@@ -40,6 +40,7 @@ export default function MobileQuickDrawer({ roomId }: { roomId: string }) {
   const requestElementFocus = useCanvasStore((s) => s.requestElementFocus);
   const setShareDialogOpen = useCanvasStore((s) => s.setShareDialogOpen);
   const setCheckpointsDialogOpen = useCanvasStore((s) => s.setCheckpointsDialogOpen);
+  const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
 
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
@@ -134,6 +135,16 @@ export default function MobileQuickDrawer({ roomId }: { roomId: string }) {
                 }}
               >
                 Checkpoints
+              </button>
+              <button
+                type="button"
+                className="clay-btn clay-btn-ux border border-[var(--border-oat)] px-3 py-2 text-left"
+                onClick={() => {
+                  setCalculatorOpen(true);
+                  setOpen(false);
+                }}
+              >
+                Calculator
               </button>
             </div>
 

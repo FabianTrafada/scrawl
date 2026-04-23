@@ -8,7 +8,7 @@ import { insertMathTemplate } from "@/lib/template-actions";
 type CommandAction =
   | { kind: "tool"; id: ToolType }
   | { kind: "toggle"; id: "snap" | "comments" | "follow" | "present" }
-  | { kind: "panel"; id: "share" | "layers" | "checkpoints" | "mobile-drawer" }
+  | { kind: "panel"; id: "share" | "layers" | "checkpoints" | "mobile-drawer" | "calculator" }
   | { kind: "background"; mode: CanvasBackgroundMode }
   | { kind: "template"; id: MathTemplateId }
   | { kind: "mentions" };
@@ -43,6 +43,7 @@ const STATIC_ITEMS: CommandItem[] = [
   { id: "panel-share", label: "Open Share Dialog", category: "Panel", action: { kind: "panel", id: "share" } },
   { id: "panel-checkpoints", label: "Open Checkpoints", category: "Panel", action: { kind: "panel", id: "checkpoints" } },
   { id: "panel-mobile", label: "Open Mobile Quick Drawer", category: "Panel", action: { kind: "panel", id: "mobile-drawer" } },
+  { id: "panel-calculator", label: "Open Calculator", category: "Panel", action: { kind: "panel", id: "calculator" } },
   { id: "mentions-jump", label: "Jump to Latest Mention", category: "Collab", action: { kind: "mentions" } },
   { id: "bg-plain", label: "Background: Plain", category: "Background", action: { kind: "background", mode: "plain" } },
   { id: "bg-grid", label: "Background: Grid", category: "Background", action: { kind: "background", mode: "grid" } },
@@ -72,6 +73,7 @@ export default function CommandPalette() {
   const setMobileQuickDrawerOpen = useCanvasStore((s) => s.setMobileQuickDrawerOpen);
   const setShareDialogOpen = useCanvasStore((s) => s.setShareDialogOpen);
   const setCheckpointsDialogOpen = useCanvasStore((s) => s.setCheckpointsDialogOpen);
+  const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
   const setCanvasBackgroundMode = useCanvasStore((s) => s.setCanvasBackgroundMode);
   const latestMentionElementId = useCanvasStore((s) => s.latestMentionElementId);
   const requestElementFocus = useCanvasStore((s) => s.requestElementFocus);
@@ -129,6 +131,7 @@ export default function CommandPalette() {
         if (item.action.id === "share") setShareDialogOpen(true);
         if (item.action.id === "checkpoints") setCheckpointsDialogOpen(true);
         if (item.action.id === "mobile-drawer") setMobileQuickDrawerOpen(true);
+        if (item.action.id === "calculator") setCalculatorOpen(true);
         break;
       case "background":
         setCanvasBackgroundMode(item.action.mode);

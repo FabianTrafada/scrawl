@@ -10,9 +10,9 @@ interface Props {
 }
 
 export default function PenElement({ element, isSelected, onSelect }: Props) {
-  if (!element.pathData) return null;
-
   const activeTool = useCanvasStore((s) => s.activeTool);
+
+  if (!element.pathData) return null;
   const isEraser = activeTool === "eraser";
 
   const DEFAULT_STROKE = "#1e1e1e";

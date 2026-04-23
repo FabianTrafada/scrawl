@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef } from "react";
 import type { ImageElement as ImageElementType } from "@/store/canvasStore";
 import { useCanvasStore } from "@/store/canvasStore";
 
@@ -15,14 +15,9 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
   const isEraser = activeTool === "eraser";
 
   const imgRef = useRef<SVGImageElement>(null);
-  const [size, setSize] = useState({ w: element.width, h: element.height });
+  const w = element.width > 0 ? element.width : 200;
+  const h = element.height > 0 ? element.height : 150;
   const shimmerId = `upload-shimmer-${element.id}`;
-
-  useEffect(() => {
-    if (element.width > 0 && element.height > 0) {
-      setSize({ w: element.width, h: element.height });
-    }
-  }, [element.width, element.height]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isEraser) return;
@@ -54,8 +49,8 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
         <rect
           x={element.x - pad}
           y={element.y - pad}
-          width={size.w + pad * 2}
-          height={size.h + pad * 2}
+          width={w + pad * 2}
+          height={h + pad * 2}
           fill="transparent"
           stroke="#3bd3fd"
           strokeWidth={2}
@@ -70,8 +65,8 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
           href={element.src}
           x={element.x}
           y={element.y}
-          width={size.w}
-          height={size.h}
+          width={w}
+          height={h}
           style={{ cursor: "move" }}
           onPointerDown={handlePointerDown}
           preserveAspectRatio="xMidYMid meet"
@@ -81,16 +76,16 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
           <rect
             x={element.x}
             y={element.y}
-            width={size.w}
-            height={size.h}
+            width={w}
+            height={h}
             fill={`url(#${shimmerId})`}
             stroke="var(--border-oat)"
             strokeDasharray="6,4"
             rx={8}
           />
           <text
-            x={element.x + size.w / 2}
-            y={element.y + size.h / 2}
+            x={element.x + w / 2}
+            y={element.y + h / 2}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="var(--color-warm-silver)"
@@ -104,16 +99,16 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
           <rect
             x={element.x}
             y={element.y}
-            width={size.w}
-            height={size.h}
+            width={w}
+            height={h}
             fill="rgba(252, 121, 129, 0.08)"
             stroke="var(--color-pomegranate-400)"
             strokeDasharray="6,4"
             rx={8}
           />
           <text
-            x={element.x + size.w / 2}
-            y={element.y + size.h / 2}
+            x={element.x + w / 2}
+            y={element.y + h / 2}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="var(--color-warm-charcoal)"
@@ -127,16 +122,16 @@ export default function ImageElement({ element, isSelected, onSelect }: Props) {
           <rect
             x={element.x}
             y={element.y}
-            width={size.w}
-            height={size.h}
+            width={w}
+            height={h}
             fill="rgba(255,255,255,0.8)"
             stroke="var(--border-oat)"
             strokeDasharray="6,4"
             rx={8}
           />
           <text
-            x={element.x + size.w / 2}
-            y={element.y + size.h / 2}
+            x={element.x + w / 2}
+            y={element.y + h / 2}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="var(--color-warm-silver)"

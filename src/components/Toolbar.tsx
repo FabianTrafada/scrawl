@@ -117,6 +117,8 @@ export default function Toolbar() {
   const shareOpen = useCanvasStore((s) => s.shareDialogOpen);
   const setShareDialogOpen = useCanvasStore((s) => s.setShareDialogOpen);
   const setCheckpointsDialogOpen = useCanvasStore((s) => s.setCheckpointsDialogOpen);
+  const calculatorOpen = useCanvasStore((s) => s.calculatorOpen);
+  const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
 
   const pathname = usePathname();
   const roomMatch = pathname.match(/^\/room\/(.+)$/);
@@ -223,6 +225,7 @@ export default function Toolbar() {
               },
               onToggleFollow: () => setFollowPresenter(!followPresenter),
               onOpenCheckpoints: () => setCheckpointsDialogOpen(true),
+              onToggleCalculator: () => setCalculatorOpen(!calculatorOpen),
             }}
           />
         </div>
@@ -239,7 +242,7 @@ export default function Toolbar() {
       <nav
         aria-label="Drawing tools"
         className={`fixed bottom-4 sm:bottom-auto sm:top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 clay-card clay-toolbar px-2 py-1.5 w-[calc(100%-2rem)] sm:w-auto max-w-full overflow-x-auto no-scrollbar ${
-          isReadOnlyUI ? "opacity-40 pointer-events-none" : ""
+          isReadOnlyUI ? "opacity-40" : ""
         }`}
       >
         {TOOLS.map((tool) => {
@@ -269,6 +272,29 @@ export default function Toolbar() {
         })}
 
         <div className="w-px h-8 bg-[var(--border-oat)] mx-1.5 shrink-0" aria-hidden="true" />
+
+        <button
+          title="Calculator (C)"
+          aria-label="Open calculator"
+          aria-pressed={calculatorOpen}
+          onClick={() => setCalculatorOpen(!calculatorOpen)}
+          className={`flex items-center justify-center w-11 h-11 shrink-0 clay-btn ${
+            calculatorOpen ? "clay-btn-active" : "text-[#55534e]"
+          }`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="4" y="2" width="16" height="20" rx="2" />
+            <line x1="8" y1="6" x2="16" y2="6" />
+            <line x1="8" y1="11" x2="8" y2="11" />
+            <line x1="12" y1="11" x2="12" y2="11" />
+            <line x1="16" y1="11" x2="16" y2="11" />
+            <line x1="8" y1="15" x2="8" y2="15" />
+            <line x1="12" y1="15" x2="12" y2="15" />
+            <line x1="16" y1="15" x2="16" y2="19" />
+            <line x1="12" y1="19" x2="12" y2="19" />
+            <line x1="8" y1="19" x2="8" y2="19" />
+          </svg>
+        </button>
 
         <button
           title="Undo (Ctrl+Z)"

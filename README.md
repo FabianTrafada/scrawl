@@ -30,11 +30,13 @@ Open [http://localhost:3000](http://localhost:3000).
 | Line      | `L`      | Draw straight lines                      |
 | Arrow     | `A`      | Draw arrows                              |
 | Text      | `T`      | Add text — auto-detects LaTeX            |
+| Calculator| `C`      | Open built-in calculator                 |
 
 ### Other Shortcuts
 
 - **Ctrl+Z** / **Cmd+Z** — Undo
 - **Ctrl+Shift+Z** / **Cmd+Shift+Z** — Redo
+- **C** — Toggle built-in calculator
 - **Delete** / **Backspace** — Delete selected element
 - **Space + Drag** or **Two-finger scroll** — Pan the canvas
 - **Pinch** or **Ctrl + Scroll wheel** — Zoom in/out

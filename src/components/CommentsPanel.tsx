@@ -134,8 +134,10 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
       if (selfMentionAliases.size === 0) return false;
 
       const mentionTokens = Array.from(commentText.matchAll(/@([a-zA-Z0-9._-]+)/g))
-        .map((m) => normalizeMentionToken(m[1]))
-        .filter(Boolean);
+        .flatMap((m) => {
+          const token = normalizeMentionToken(m[1]);
+          return token ? [token] : [];
+        });
       return mentionTokens.some((token) => selfMentionAliases.has(token));
     },
     [selfMentionAliases]
@@ -169,7 +171,7 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
         });
       }
     },
-    [commentsPanelOpen, commentsView, isMentionedInText, playMentionSound, registerMention, session?.user?.id]
+    [commentsPanelOpen, commentsView, isMentionedInText, playMentionSound, registerMention, session]
   );
 
   const mentionFilteredItems = useMemo(
@@ -239,6 +241,7 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
       const res = await fetch(`/api/rooms/${roomId}/comments`, { cache: "no-store" });
       if (!res.ok) {
         setRefreshError(`Failed to load comments (${res.status})`);
+        setIsRefreshing(false);
         return;
       }
 
@@ -252,9 +255,9 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
         })
       );
       setRefreshError(null);
+      setIsRefreshing(false);
     } catch {
       setRefreshError("Failed to load comments");
-    } finally {
       setIsRefreshing(false);
     }
   }, [roomId]);
@@ -418,7 +421,14 @@ export default function CommentsPanel({ roomId }: { roomId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
-      if (!res.ok) throw new Error(`POST failed (${res.status})`);
+      if (!res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === tempId ? { ...item, pending: false, failed: true } : item
+          )
+        );
+        return;
+      }
       const data = (await res.json()) as { comment?: CommentItem };
       if (data.comment) {
         upsertComment(data.comment);
