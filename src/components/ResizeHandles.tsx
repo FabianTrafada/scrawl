@@ -55,6 +55,7 @@ function Handle({
         cy={cy}
         r={HIT_R}
         fill="transparent"
+        data-export-ignore="true"
         style={{ cursor: CURSOR_MAP[handle] }}
         onPointerDown={(e) => {
           e.stopPropagation();
@@ -69,6 +70,7 @@ function Handle({
         fill="#ffffff"
         stroke="#3bd3fd"
         strokeWidth={2}
+        data-export-ignore="true"
         pointerEvents="none"
       />
     </g>

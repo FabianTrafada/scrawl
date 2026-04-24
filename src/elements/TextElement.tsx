@@ -113,6 +113,7 @@ export default function TextElementRenderer({
           strokeWidth={2}
           strokeDasharray="8,5"
           rx={6}
+          data-export-ignore="true"
           pointerEvents="none"
         />
       )}

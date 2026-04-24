@@ -7,6 +7,7 @@ import Link from "next/link";
 import PresenceAvatars from "./PresenceAvatars";
 import ShareDialog from "./ShareDialog";
 import UserMenu from "./UserMenu";
+import ExportDialog from "./ExportDialog";
 import { useHydrated } from "@/lib/use-hydrated";
 
 const TOOLS: { type: ToolType; label: string; shortcut: string; svg: string }[] = [
@@ -119,6 +120,7 @@ export default function Toolbar() {
   const setCheckpointsDialogOpen = useCanvasStore((s) => s.setCheckpointsDialogOpen);
   const calculatorOpen = useCanvasStore((s) => s.calculatorOpen);
   const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
+  const setExportDialogOpen = useCanvasStore((s) => s.setExportDialogOpen);
 
   const pathname = usePathname();
   const roomMatch = pathname.match(/^\/room\/(.+)$/);
@@ -226,6 +228,7 @@ export default function Toolbar() {
               onToggleFollow: () => setFollowPresenter(!followPresenter),
               onOpenCheckpoints: () => setCheckpointsDialogOpen(true),
               onToggleCalculator: () => setCalculatorOpen(!calculatorOpen),
+              onOpenExport: () => setExportDialogOpen(true),
             }}
           />
         </div>
@@ -293,6 +296,19 @@ export default function Toolbar() {
             <line x1="16" y1="15" x2="16" y2="19" />
             <line x1="12" y1="19" x2="12" y2="19" />
             <line x1="8" y1="19" x2="8" y2="19" />
+          </svg>
+        </button>
+
+        <button
+          title="Export"
+          aria-label="Open export dialog"
+          onClick={() => setExportDialogOpen(true)}
+          className="flex items-center justify-center w-11 h-11 shrink-0 clay-btn text-[#55534e]"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
         </button>
 
@@ -496,6 +512,8 @@ export default function Toolbar() {
           onClose={() => setShareDialogOpen(false)}
         />
       )}
+
+      <ExportDialog roomId={roomId ?? undefined} />
     </>
   );
 }

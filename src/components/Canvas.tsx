@@ -22,6 +22,8 @@ import {
   clearPendingRoomImport,
   getPendingRoomImport,
 } from "@/lib/room-import";
+import { performCanvasExport } from "@/lib/export/renderer";
+import { getContentBounds as getExportContentBounds } from "@/lib/export/geometry";
 
 import PenElement from "@/elements/PenElement";
 import ShapeElement from "@/elements/ShapeElement";
@@ -135,6 +137,8 @@ export default function Canvas({ roomId }: CanvasProps) {
   const setCalculatorOpen = useCanvasStore((s) => s.setCalculatorOpen);
   const focusElementRequest = useCanvasStore((s) => s.focusElementRequest);
   const clearElementFocusRequest = useCanvasStore((s) => s.clearElementFocusRequest);
+  const exportRequest = useCanvasStore((s) => s.exportRequest);
+  const clearCanvasExportRequest = useCanvasStore((s) => s.clearCanvasExportRequest);
   const hydrateScene = useCanvasStore((s) => s.hydrateScene);
   const undo = useCanvasStore((s) => s.undo);
   const redo = useCanvasStore((s) => s.redo);
@@ -1605,6 +1609,7 @@ export default function Canvas({ roomId }: CanvasProps) {
           d={pathData}
           fill={effectiveStroke}
           stroke="none"
+          data-export-ignore="true"
           style={{ filter: glow }}
         />
       );
@@ -1619,6 +1624,7 @@ export default function Canvas({ roomId }: CanvasProps) {
         <rect
           x={x} y={y} width={w} height={h}
           fill="none" stroke={effectiveStroke} strokeWidth={strokeWidth}
+          data-export-ignore="true"
           strokeDasharray="6,3" opacity={0.6}
           style={{ filter: glow }}
         />
@@ -1634,6 +1640,7 @@ export default function Canvas({ roomId }: CanvasProps) {
         <ellipse
           cx={cx} cy={cy} rx={rx} ry={ry}
           fill="none" stroke={effectiveStroke} strokeWidth={strokeWidth}
+          data-export-ignore="true"
           strokeDasharray="6,3" opacity={0.6}
           style={{ filter: glow }}
         />
@@ -1646,6 +1653,7 @@ export default function Canvas({ roomId }: CanvasProps) {
           x1={drawing.startX} y1={drawing.startY}
           x2={drawing.currentX} y2={drawing.currentY}
           stroke={effectiveStroke} strokeWidth={strokeWidth}
+          data-export-ignore="true"
           strokeDasharray="6,3" opacity={0.6}
           style={{ filter: glow }}
         />
@@ -1669,6 +1677,39 @@ export default function Canvas({ roomId }: CanvasProps) {
     () => getContentBounds(dedupedElements),
     [dedupedElements]
   );
+  const exportContentBounds = useMemo(
+    () => getExportContentBounds(dedupedElements),
+    [dedupedElements]
+  );
+
+  useEffect(() => {
+    if (!exportRequest) return;
+    const svg = svgRef.current;
+    if (!svg) {
+      clearCanvasExportRequest();
+      return;
+    }
+
+    const request = exportRequest;
+    clearCanvasExportRequest();
+
+    const rect = svg.getBoundingClientRect();
+    const fallbackViewport = {
+      width: rect.width || viewportSize.width || window.innerWidth,
+      height: rect.height || viewportSize.height || window.innerHeight,
+    };
+
+    void performCanvasExport(
+      {
+        svgRoot: svg,
+        camera,
+        viewport: fallbackViewport,
+        roomId: request.roomId,
+        contentBounds: exportContentBounds,
+      },
+      request.settings
+    );
+  }, [exportRequest, clearCanvasExportRequest, camera, viewportSize, exportContentBounds]);
 
   const shouldShowBackToContent = useMemo(() => {
     if (!contentBounds) return false;
@@ -1807,6 +1848,7 @@ export default function Canvas({ roomId }: CanvasProps) {
         </defs>
 
         <rect
+          data-export-background="true"
           width="100%"
           height="100%"
           fill={
@@ -1818,7 +1860,7 @@ export default function Canvas({ roomId }: CanvasProps) {
           }
         />
 
-        <g transform={`translate(${camera.x},${camera.y}) scale(${camera.zoom})`}>
+        <g data-export-scene="true" transform={`translate(${camera.x},${camera.y}) scale(${camera.zoom})`}>
           {[...dedupedElements]
             .filter((el) => !el.hidden)
             .filter((el) => {
@@ -1882,6 +1924,7 @@ export default function Canvas({ roomId }: CanvasProps) {
 
           {lasso && (
             <rect
+              data-export-ignore="true"
               x={Math.min(lasso.startX, lasso.currentX)}
               y={Math.min(lasso.startY, lasso.currentY)}
               width={Math.abs(lasso.currentX - lasso.startX)}

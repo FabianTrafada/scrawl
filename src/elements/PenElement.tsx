@@ -33,6 +33,7 @@ export default function PenElement({ element, isSelected, onSelect }: Props) {
       opacity={element.opacity}
       pointerEvents={isEraser ? "none" : "all"}
       data-hitbox="pen"
+      data-export-hitbox="true"
       data-element-id={element.id}
       style={{ cursor: "move", filter: glow }}
       onPointerDown={(e) => {

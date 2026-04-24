@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { liveblocks, type WithLiveblocks } from "@liveblocks/zustand";
 import { liveblocksClient } from "@/lib/liveblocks";
 import { generateId } from "@/lib/utils";
+import type { CanvasExportRequest, ExportSettings } from "@/lib/export/types";
 import type { CanvasBackgroundMode, CommentsViewMode } from "@/types/collab";
 
 export type ToolType =
@@ -142,6 +143,8 @@ interface CanvasState {
   calculatorOpen: boolean;
   shareDialogOpen: boolean;
   checkpointsDialogOpen: boolean;
+  exportDialogOpen: boolean;
+  exportRequest: CanvasExportRequest | null;
   followPresenter: boolean;
   canvasBackgroundMode: CanvasBackgroundMode;
   recentCommandIds: string[];
@@ -181,6 +184,12 @@ interface CanvasState {
   setCalculatorOpen: (open: boolean) => void;
   setShareDialogOpen: (open: boolean) => void;
   setCheckpointsDialogOpen: (open: boolean) => void;
+  setExportDialogOpen: (open: boolean) => void;
+  requestCanvasExport: (payload: {
+    settings: ExportSettings;
+    roomId?: string;
+  }) => void;
+  clearCanvasExportRequest: () => void;
   setFollowPresenter: (follow: boolean) => void;
   setCanvasBackgroundMode: (mode: CanvasBackgroundMode) => void;
   pushRecentCommand: (commandId: string) => void;
@@ -272,6 +281,8 @@ export const useCanvasStore = create<WithLiveblocks<CanvasState>>()(
       calculatorOpen: false,
       shareDialogOpen: false,
       checkpointsDialogOpen: false,
+      exportDialogOpen: false,
+      exportRequest: null,
       followPresenter: false,
       canvasBackgroundMode: "plain",
       recentCommandIds: [],
@@ -335,6 +346,16 @@ export const useCanvasStore = create<WithLiveblocks<CanvasState>>()(
       setCalculatorOpen: (open) => set({ calculatorOpen: open }),
       setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
       setCheckpointsDialogOpen: (open) => set({ checkpointsDialogOpen: open }),
+      setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
+      requestCanvasExport: ({ settings, roomId }) =>
+        set({
+          exportRequest: {
+            requestId: generateId(),
+            roomId,
+            settings,
+          },
+        }),
+      clearCanvasExportRequest: () => set({ exportRequest: null }),
       setFollowPresenter: (follow) => set({ followPresenter: follow }),
       setCanvasBackgroundMode: (mode) => set({ canvasBackgroundMode: mode }),
       pushRecentCommand: (commandId) =>

@@ -139,6 +139,7 @@ export default function ShapeElement({ element, isSelected, onSelect }: Props) {
         strokeDasharray={isSelected ? "6,4" : undefined}
         pointerEvents={isEraser ? "none" : "all"}
         data-hitbox="shape"
+        data-export-hitbox="true"
         data-element-id={element.id}
         data-shape-type={element.type}
         style={{ cursor: "move" }}
